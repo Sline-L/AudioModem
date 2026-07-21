@@ -1,0 +1,15 @@
+source,output,mode,mapping,filename,size_bytes,header_bytes
+Week2_Challenge/ofdm_stage1_outputs/file01.fft.npy,Week2_Challenge/recovered_from_npy/file01.txt,equalized_fft_bins_1_to_511,main,files/file01.txt,8761,22
+Week2_Challenge/ofdm_stage1_outputs/file02.fft.npy,Week2_Challenge/recovered_from_npy/file02.tiff,equalized_fft_bins_1_to_511,main,files/file02.tiff,67202,24
+Week2_Challenge/ofdm_stage1_outputs/file03.fft.npy,Week2_Challenge/recovered_from_npy/file03.tiff,equalized_fft_bins_1_to_511,main,files/file03.tiff,111212,25
+Week2_Challenge/ofdm_stage1_outputs/file04.fft.npy,Week2_Challenge/recovered_from_npy/file04.wav,equalized_fft_bins_1_to_511,main,files/file04.wav,127964,24
+Week2_Challenge/ofdm_stage1_outputs/file05.fft.npy,Week2_Challenge/recovered_from_npy/file05.tiff,equalized_fft_bins_1_to_511,main,files/file05.tiff,138422,25
+Week2_Challenge/ofdm_stage1_outputs/file06.fft.npy,Week2_Challenge/recovered_from_npy/file06.tiff,equalized_fft_bins_1_to_511,main,files/file06.tiff,164392,25
+Week2_Challenge/ofdm_stage1_outputs/file07.fft.npy,Week2_Challenge/recovered_from_npy/file07.tiff,equalized_fft_bins_1_to_511,main,files/file07.tiff,189022,25
+Week2_Challenge/ofdm_stage1_outputs/file08.fft.npy,Week2_Challenge/recovered_from_npy/file08.tiff,equalized_fft_bins_1_to_511,main,files/file08.tiff,201022,25
+Week2_Challenge/ofdm_stage1_outputs/file09.fft.npy,Week2_Challenge/recovered_from_npy/file09.tiff,equalized_fft_bins_1_to_511,main,files/file09.tiff,208156,25
+Week2_Challenge/ofdm_stage1_outputs/file10.fft.npy,Week2_Challenge/recovered_from_npy/file10.tiff,equalized_fft_bins_1_to_511,main,files/file10.tiff,243422,25
+Week2_Challenge/ofdm_stage1_outputs/file11.fft.npy,Week2_Challenge/recovered_from_npy/file11.tiff,equalized_fft_bins_1_to_511,main,files/file11.tiff,254394,25
+Week2_Challenge/ofdm_stage1_outputs/file12.fft.npy,Week2_Challenge/recovered_from_npy/file12.tiff,equalized_fft_bins_1_to_511,main,files/file12.tiff,270714,25
+Week2_Challenge/ofdm_stage1_outputs/file13.fft.npy,Week2_Challenge/recovered_from_npy/file13.tiff,equalized_fft_bins_1_to_511,main,files/file13.tiff,364400,25
+Week2_Challenge/ofdm_stage1_outputs/file14.fft.npy,Week2_Challenge/recovered_from_npy/file14.wav,equalized_fft_bins_1_to_511,main,files/file14.wav,606364,24

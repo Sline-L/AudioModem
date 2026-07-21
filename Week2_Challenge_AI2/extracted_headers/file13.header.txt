@@ -1,0 +1,6 @@
+source: /home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge/ofdm_stage1_outputs/file13.fft.npy
+mode: equalized_fft_bins_1_to_511
+mapping: main
+filename: files/file13.tiff
+size_bytes: 364400
+header_bytes: 25

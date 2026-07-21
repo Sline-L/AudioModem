@@ -1,0 +1,23 @@
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+.python-version
+.venv/
+venv/
+env/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Codex/session metadata
+.git/
+.agents/
+.codex/
+.git_repo/
+
+# Large generated artifacts that exceed normal GitHub limits
+Week2_Challenge_AI2/exported_samples/
+Week2_Challenge_AI2/ofdm_stage1_outputs/
