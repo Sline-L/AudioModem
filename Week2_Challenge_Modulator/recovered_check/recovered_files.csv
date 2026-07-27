@@ -1,0 +1,16 @@
+source_wav,output_file,size_bytes,mapping
+Week2_Challenge_Modulator/data/file01.wav,Week2_Challenge_Modulator/recovered_check/file01.txt,8761,main
+Week2_Challenge_Modulator/data/file02.wav,Week2_Challenge_Modulator/recovered_check/file02.tiff,67202,main
+Week2_Challenge_Modulator/data/file03.wav,Week2_Challenge_Modulator/recovered_check/file03.tiff,111212,main
+Week2_Challenge_Modulator/data/file04.wav,Week2_Challenge_Modulator/recovered_check/file04.wav,127964,main
+Week2_Challenge_Modulator/data/file05.wav,Week2_Challenge_Modulator/recovered_check/file05.tiff,138422,main
+Week2_Challenge_Modulator/data/file06.wav,Week2_Challenge_Modulator/recovered_check/file06.tiff,164392,main
+Week2_Challenge_Modulator/data/file07.wav,Week2_Challenge_Modulator/recovered_check/file07.tiff,189022,main
+Week2_Challenge_Modulator/data/file08.wav,Week2_Challenge_Modulator/recovered_check/file08.tiff,201022,main
+Week2_Challenge_Modulator/data/file09.wav,Week2_Challenge_Modulator/recovered_check/file09.tiff,208156,main
+Week2_Challenge_Modulator/data/file10.wav,Week2_Challenge_Modulator/recovered_check/file10.tiff,243422,main
+Week2_Challenge_Modulator/data/file11.wav,Week2_Challenge_Modulator/recovered_check/file11.tiff,254394,main
+Week2_Challenge_Modulator/data/file12.wav,Week2_Challenge_Modulator/recovered_check/file12.tiff,270714,main
+Week2_Challenge_Modulator/data/file13.wav,Week2_Challenge_Modulator/recovered_check/file13.tiff,364400,main
+Week2_Challenge_Modulator/data/file14.wav,Week2_Challenge_Modulator/recovered_check/file14.wav,606364,main
+Week2_Challenge_Modulator/data/file15.wav,Week2_Challenge_Modulator/recovered_check/file15.txt,19,main

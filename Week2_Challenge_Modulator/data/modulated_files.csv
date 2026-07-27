@@ -1,0 +1,16 @@
+source_file,output_wav,ofdm_symbols,mapping
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file01.txt,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file01.wav,69,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file02.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file02.wav,527,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file03.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file03.wav,871,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file04.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file04.wav,1002,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file05.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file05.wav,1084,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file06.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file06.wav,1288,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file07.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file07.wav,1480,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file08.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file08.wav,1574,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file09.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file09.wav,1630,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file10.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file10.wav,1906,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file11.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file11.wav,1992,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file12.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file12.wav,2120,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file13.tiff,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file13.wav,2853,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file14.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file14.wav,4747,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/source/file15.txt,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Modulator/data/file15.wav,1,main
