@@ -1,0 +1,16 @@
+source_wav,output_file,size_bytes,mapping
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file01.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file01.txt,8761,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file02.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file02.tiff,67202,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file03.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file03.tiff,111212,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file04.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file04.wav,127964,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file05.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file05.tiff,138422,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file06.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file06.tiff,164392,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file07.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file07.tiff,189022,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file08.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file08.tiff,201022,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file09.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file09.tiff,208156,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file10.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file10.tiff,243422,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file11.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file11.tiff,254394,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file12.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file12.tiff,270714,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file13.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file13.tiff,364400,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file14.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file14.wav,606364,main
+/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/data/file15.wav,/home/Sline/Work/VSCode/Projects/AudioModem/Week2_Challenge_Demodulator/recovered/file15.txt,19,main
