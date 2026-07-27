@@ -19,5 +19,5 @@ Thumbs.db
 .git_repo/
 
 # Large generated artifacts that exceed normal GitHub limits
-Week2_Challenge_AI2/exported_samples/
-Week2_Challenge_AI2/ofdm_stage1_outputs/
+Week2_Challenge_AI
+Week2_Challenge_AI2
