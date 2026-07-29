@@ -1,0 +1,2 @@
+source_file,output_wav,ofdm_symbols,mapping
+Week2_Challenge_Modulator/source/file16_test.txt,Week2_Challenge_Modulator/data_test/file01.wav,192,main

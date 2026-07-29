@@ -19,5 +19,4 @@ Thumbs.db
 .git_repo/
 
 # Large generated artifacts that exceed normal GitHub limits
-Week2_Challenge_AI
-Week2_Challenge_AI2
+archive/tmp/
