@@ -1,13 +1,13 @@
 # AudioModem
 
-AudioModem is now organized around real acoustic channel experiments. The main pipeline uses 48 kHz audio, a 1024-point FFT, and a 128-sample cyclic prefix.
+AudioModem is organized around real acoustic channel experiments. The main pipeline uses 48 kHz audio, a 1024-point FFT, a 128-sample cyclic prefix, and a random-QPSK sync preamble for file transfers.
 
 Detailed Chinese code guide: [code_guide.md](code_guide.md).
 
 ## Layout
 
-- `audiomodem.py`: compact shared WAV, OFDM, QPSK, and probe helpers.
-- `tx.py`: creates OFDM/QPSK transmit WAV files.
+- `audiomodem.py`: compact shared WAV, OFDM, modulation, sync, and probe helpers.
+- `tx.py`: creates OFDM transmit WAV files with a default sync preamble.
 - `rx.py`: recovers files with either ideal channel bins or an estimated `H.npy`.
 - `probe.py`: creates `ones`, `chirp`, `step`, `bandstep`, or `random` probe WAV files.
 - `analyze.py`: estimates `H`, saves received `Y`, theoretical `Y`, CSV summaries, and plots.

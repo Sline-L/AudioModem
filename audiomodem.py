@@ -2,6 +2,7 @@ from pathlib import Path
 import wave
 
 import numpy as np
+from scipy import signal
 
 FS, N, CP = 48000, 1024, 128
 L = N + CP
@@ -134,6 +135,25 @@ def ofdm_rx(x, k):
     n = len(x) // L
     y = x[: n * L].reshape(n, L)[:, CP:]
     return np.fft.fft(y, axis=1)[:, k]
+
+
+def preamble_symbols(k, n=32, seed=2026):
+    rng = np.random.default_rng(seed)
+    b = rng.integers(0, 2, (n, len(k), 2), dtype=np.uint8)
+    return np.where(b[:, :, 1], -1, 1) + 1j * np.where(b[:, :, 0], -1, 1)
+
+
+def preamble_wave(k, n=32, seed=2026):
+    return ofdm_tx(preamble_symbols(k, n, seed), k)
+
+
+def find_sync(rx, preamble):
+    if len(rx) < len(preamble):
+        raise ValueError("receive wav is shorter than preamble")
+    c = signal.correlate(rx, preamble, mode="valid", method="fft")
+    i = int(np.argmax(np.abs(c)))
+    e = np.linalg.norm(rx[i : i + len(preamble)]) * np.linalg.norm(preamble)
+    return i, float(abs(c[i]) / e) if e else 0.0
 
 
 def file_symbols(path, k, mod="qpsk"):

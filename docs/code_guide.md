@@ -55,8 +55,14 @@
 - `ofdm_rx(x, k)`  
   把接收音频按 `1152` 点切成 OFDM 符号，去掉 `128` 点 CP，FFT 后取出子载波 `k`。
 
+- `preamble_symbols(k, n=32, seed=2026)` / `preamble_wave(k, n=32, seed=2026)`  
+  生成文件传输用的物理层同步头。同步头是固定随机 QPSK OFDM 符号，默认 32 个 OFDM 符号，时长约 `0.768 s`。它不是 `filename\0size\0payload` 文件头。
+
+- `find_sync(rx, preamble)`  
+  用互相关在录音中寻找同步头位置，返回 `sync_start` 和 `sync_score`。`rx.py` 用它自动跳过录音前面的静音和设备延迟。
+
 - `file_symbols(path, k)`  
-  文件发送专用：读文件、打包头部、QPSK 映射，并补零成完整 OFDM 符号矩阵。
+  文件发送专用：读文件、打包头部、按 `--mod` 映射，并补零成完整 OFDM 符号矩阵。
 
 - `probe_symbols(kind, k, n, seed=2026)`  
   生成训练频域符号，支持：
@@ -73,10 +79,16 @@
 ### 数据流
 
 ```text
-文件 -> filename\0size\0payload -> BPSK/QPSK/16-QAM -> OFDM -> WAV
+[随机QPSK同步头] + [文件 -> filename\0size\0payload -> BPSK/QPSK/16-QAM -> OFDM] -> WAV
 ```
 
 如果传入 `--h H.npy`，发送端会先把频域符号乘以 `H`。一般真实硬件测试不需要这么做；默认就是理想发送信道。
+
+默认会在 payload 前加入同步头。同步头用于真实录音起点同步，和文件头是两回事：
+
+```text
+[physical preamble][payload bytes header + payload data]
+```
 
 ### 用法
 
@@ -97,6 +109,9 @@ python tx.py data/source/file16_test.txt --mod qam16 --bins 8 150 --out data/tx/
 - `input`：要发送的源文件。默认是 `data/source/file16_test.txt`。
 - `--bins START END`：使用的子载波范围。推荐测试 `8 420`、`8 200`、`8 150`。
 - `--mod bpsk|qpsk|qam16`：文件调制方式，默认 `qpsk`。
+- `--sync-symbols N`：同步头 OFDM 符号数，默认 `32`。
+- `--sync-seed N`：同步头随机种子，默认 `2026`。
+- `--no-sync`：关闭同步头，输出旧式纯 payload WAV。
 - `--h path/to/H.npy`：可选，发送端预乘一个频域信道。
 - `--out path.wav`：输出 WAV 路径。
 
@@ -112,7 +127,7 @@ python tx.py data/source/file16_test.txt --mod qam16 --bins 8 150 --out data/tx/
 ### 数据流
 
 ```text
-WAV -> 去 CP -> FFT -> 除以 H -> BPSK/QPSK/16-QAM 判决 -> bytes -> 文件
+WAV -> 互相关找同步头 -> 去 CP -> FFT -> 除以 H -> BPSK/QPSK/16-QAM 判决 -> bytes -> 文件
 ```
 
 如果没有传 `--h`，默认使用理想信道 `H=1`，适合离线闭环测试。真实录音要传 `analyze.py` 得到的 `H.npy`。
@@ -142,17 +157,21 @@ python rx.py data/rx/receive.wav --bins 8 150 --h runs/probe_ones_8_150/H.npy --
 - `input`：接收 WAV。默认是 `data/tx/file.wav`。
 - `--bins START END`：必须和发送、估计 H 时一致。
 - `--mod bpsk|qpsk|qam16`：必须和 `tx.py` 一致。
+- `--sync-symbols N`：必须和发送端一致。
+- `--sync-seed N`：必须和发送端一致。
+- `--no-sync`：接收旧式纯 payload WAV，不做互相关同步。
 - `--h path/to/H.npy`：频域信道响应，长度必须等于 bins 数量。
 - `--out dir`：恢复文件输出目录。
-xia
+
 ### 输出
 
 - 恢复出的原文件。
 - `rx_symbols.npy`：均衡后的 QPSK 星座点，后续可以用它计算 BER 或画星座图。
+- 命令行会打印 `sync_start`、`sync_score`、`payload_start`。
 
 ### 注意
 
-当前 `rx.py` 假设接收 WAV 从 OFDM 数据开头开始。如果真实录音前面有明显静音，需要先裁剪，或后续给 `rx.py` 增加同步功能。
+默认同步只处理起点偏移，不处理采样率漂移。真实录音如果 `sync_score` 很低，优先检查播放音量、录音音量、bins 和 `--sync-seed` 是否一致。
 
 ## 4. `probe.py`
 

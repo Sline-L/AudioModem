@@ -1,0 +1,39 @@
+AudioModem channel test payload.
+
+This file is intentionally larger than file15.txt, but still small enough for
+quick speaker-to-microphone experiments. It is plain ASCII so a recovered copy
+can be checked with cmp, diff, or by opening it in any text editor.
+
+Test block 001: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 002: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 003: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 004: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 005: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 006: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 007: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 008: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 009: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 010: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 011: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 012: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 013: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 014: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 015: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 016: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 017: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 018: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 019: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 020: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 021: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 022: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 023: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 024: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 025: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 026: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 027: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 028: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 029: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 030: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 031: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+Test block 032: OFDM QPSK modem payload integrity check. The quick brown fox jumps over the lazy dog. 0123456789.
+End of AudioModem channel test payload.
