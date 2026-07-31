@@ -19,6 +19,7 @@ def args():
     p.add_argument("--bins", nargs=2, type=int, default=(8, 420), metavar=("START", "END"))
     p.add_argument("--symbols", type=int, default=256)
     p.add_argument("--seed", type=int, default=2026)
+    p.add_argument("--bandstep-parts", type=int, default=16)
     p.add_argument("--out", type=Path, default=Path("runs/probe"))
     return p.parse_args()
 
@@ -58,7 +59,7 @@ def plot(path, k, a, b, title, ylabel):
 def main():
     a = args()
     k = bins(*a.bins)
-    x = probe_symbols(a.kind, k, a.symbols, a.seed)
+    x = probe_symbols(a.kind, k, a.symbols, a.seed, a.bandstep_parts)
     tx_raw = ofdm_tx(x, k)
     g = wav_gain(tx_raw)
     tx = tx_raw * g

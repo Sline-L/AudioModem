@@ -192,6 +192,7 @@ python probe.py --kind ones --bins 8 150 --symbols 256 --out data/tx/probe_ones_
 python probe.py --kind chirp --bins 8 200 --symbols 256 --out data/tx/probe_chirp_8_200.wav
 python probe.py --kind step --bins 8 420 --symbols 256 --out data/tx/probe_step_8_420.wav
 python probe.py --kind bandstep --bins 8 150 --symbols 256 --out data/tx/probe_bandstep_8_150.wav
+python probe.py --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out data/tx/probe_bandstep_full_64parts_long.wav
 ```
 
 ### 参数
@@ -200,6 +201,7 @@ python probe.py --kind bandstep --bins 8 150 --symbols 256 --out data/tx/probe_b
 - `--bins START END`：训练覆盖的子载波范围。
 - `--symbols N`：训练 OFDM 符号数。默认 `256`，时长约 `256 * 1152 / 48000 = 6.144 s`。
 - `--seed N`：`random` 训练使用的随机种子。
+- `--bandstep-parts N`：`bandstep` 划分的连续频带数，默认 `16`；发送和分析时必须一致。
 - `--out path.wav`：输出 probe WAV。
 
 ### 输出
@@ -223,6 +225,7 @@ python probe.py --kind bandstep --bins 8 150 --symbols 256 --out data/tx/probe_b
 
 ```bash
 python analyze.py data/rx/receive.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_ones_8_150
+python analyze.py data/step3_bandstep/receive_bandstep_1.wav --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out runs/step3_bandstep/1
 ```
 
 离线自检可以把发送 probe 当作接收输入：
@@ -246,6 +249,7 @@ mean_abs_h≈1
 - `--bins START END`：必须和 `probe.py` 一致。
 - `--symbols N`：必须和 `probe.py` 一致。
 - `--seed N`：如果是 `random` probe，必须和 `probe.py` 一致。
+- `--bandstep-parts N`：如果是 `bandstep` probe，必须和 `probe.py` 一致。
 - `--out dir`：输出目录。
 
 ### 输出
