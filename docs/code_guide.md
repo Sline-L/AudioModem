@@ -305,6 +305,7 @@ python tx_combo.py
 
 - `input`：要发送的源文件，默认 `data/step2_file/exp2.txt`。
 - `--bins START END`：默认 `8 150`。
+- `--fband-profile conservative|trimmed`：使用 bandstep 和真实 payload 实测后挑出的非连续频段。`conservative` 为第一版 `128-160,164-240,315-400`；`trimmed` 会删掉真实 payload 中错误集中的 `170-171` 和 `358-400`，保留 `128-160,164-169,172-240,315-357`。每个 profile 都使用每个 OFDM symbol 内的 comb pilot，没有列入 active 的 bins 全部置零。
 - `--mod bpsk|qpsk|qam16`：默认 `qpsk`。
 - `--probe-kind ones|chirp|step|bandstep|random`：默认 `ones`。
 - `--probe-symbols N`：默认 `256`。
@@ -355,6 +356,31 @@ payload 重复 3 遍
 ```
 
 音频时长约 `36.000 s`。真实录音建议录 `39-40 s`。
+
+### Step 4: fband + comb pilot 实验
+
+bandstep 和第一轮真实 payload 实测后，优先测试删掉坏频点的非连续频段和每符号 comb pilot：
+
+```bash
+python tx_combo.py data/step4_fband_optimization/exp2.txt --fband-profile trimmed --mod bpsk --sync-symbols 128 --payload-repeats 3 --out data/step4_fband_optimization/exp2_combo_fband_trimmed_bpsk_repeat3.wav
+```
+
+当前 `exp2.txt` 会生成：
+
+```text
+active bins: 128-160, 164-169, 172-240, 315-357
+data bins: 127 个
+comb pilot bins: 24 个，每个 payload OFDM symbol 都发送
+256 个 probe OFDM symbols
+128 个 file preamble OFDM symbols
+279 个 payload OFDM symbols x 3 repeats
+```
+
+音频时长约 `29.304 s`。真实录音建议录 `32-33 s`，保存到：
+
+```text
+data/step4_fband_optimization/receive_exp2_fband_trimmed_1.wav
+```
 
 ## 7. `rx_combo.py`
 
@@ -407,6 +433,12 @@ BPSK + pilot 平均 + payload 重复投票接收：
 
 ```bash
 python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/1
+```
+
+Step 4 fband + comb pilot 接收：
+
+```bash
+python rx_combo.py data/step4_fband_optimization/receive_exp2_fband_trimmed_1.wav --source data/step4_fband_optimization/exp2.txt --fband-profile trimmed --mod bpsk --sync-symbols 128 --payload-repeats 3 --repeat-combine hard --pilot-smooth 12 --out runs/step4_fband_optimization/fband_trimmed_bpsk_repeat3/1
 ```
 
 接收端默认会在 probe 后面 `±8192` samples 范围内重新寻找 file preamble。这个范围用于处理 `ones` probe 带来的整 OFDM symbol 起点歧义。

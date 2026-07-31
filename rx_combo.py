@@ -23,6 +23,12 @@ from audiomodem import (
     unpack,
     wav_gain,
 )
+from fband import (
+    fband_profile,
+    file_symbols_with_comb_pilots,
+    interp_h_from_comb_pilots,
+    profile_meta,
+)
 
 
 def normalized_score(rx, tx, start):
@@ -61,6 +67,7 @@ def args():
     p.add_argument("input", nargs="+", type=Path)
     p.add_argument("--source", type=Path, default=Path("data/step2_file/exp2.txt"))
     p.add_argument("--bins", nargs=2, type=int, default=(8, 150), metavar=("START", "END"))
+    p.add_argument("--fband-profile", choices=["conservative", "trimmed"], default=None)
     p.add_argument("--mod", choices=MODS, default="qpsk")
     p.add_argument("--probe-kind", choices=["ones", "chirp", "step", "bandstep", "random"], default="ones")
     p.add_argument("--probe-symbols", type=int, default=256)
@@ -202,6 +209,39 @@ def bytes_from_bpsk_soft(z_repeats):
     return np.packbits(bits[: bits.size // 8 * 8], bitorder="big").tobytes()
 
 
+def comb_pilot_residual(y, h0, comb_pilots, pilot_idx):
+    n = min(len(y), len(comb_pilots))
+    if n == 0 or len(pilot_idx) == 0:
+        return np.nan
+    eq = y[:n, pilot_idx] / h0[pilot_idx]
+    return float(np.mean(np.abs(eq - comb_pilots[:n]) ** 2))
+
+
+def comb_pilot_decode(y, h0, payload_info, pilot_smooth=0):
+    profile = payload_info["fband_profile"]
+    data_symbols = payload_info["data_symbols"]
+    comb_pilots = payload_info["comb_pilots"]
+    n = min(len(y), data_symbols, len(comb_pilots))
+    if n == 0:
+        return np.empty((0, len(profile["data_idx"])), complex), np.empty((0, len(h0)), complex), np.nan
+
+    k = payload_info["k"]
+    pilot_idx = profile["pilot_idx"]
+    data_idx = profile["data_idx"]
+    hs = []
+    residuals = []
+    for i in range(n):
+        h = h0.copy()
+        residuals.append(float(np.mean(np.abs(y[i, pilot_idx] / h0[pilot_idx] - comb_pilots[i]) ** 2)))
+        h[pilot_idx] = y[i, pilot_idx] / comb_pilots[i]
+        h[data_idx] = interp_h_from_comb_pilots(k, h, pilot_idx, data_idx, profile["ranges"])
+        hs.append(h)
+    hs = np.asarray(hs, dtype=complex)
+    hs = smooth_h_series(hs, pilot_smooth)
+    z = y[:n, data_idx] / hs[:, data_idx]
+    return z, hs, float(np.mean(residuals)) if residuals else np.nan
+
+
 def vote_repeat_bytes(decoded_repeats):
     if len(decoded_repeats) == 1:
         return decoded_repeats[0]
@@ -245,7 +285,38 @@ def save_h_summary(path, k, h, y, x):
             w.writerow([int(kk), kk * FS / 1024, abs(yy), abs(xx), hh.real, hh.imag, abs(hh), np.angle(hh)])
 
 
-def choose_payload_start(rx, k, p0, h0, data_symbols, pilots, interval, pilot_len, framed_symbols_once, repeats, search):
+def choose_payload_start(rx, k, p0, h0, payload_info, interval, pilot_len, repeats, search):
+    if payload_info.get("comb_pilots") is not None:
+        if payload_info["data_symbols"] == 0:
+            return p0, 0, np.nan
+        best = (np.inf, p0, 0)
+        for d in range(-search, search + 1):
+            p = p0 + d
+            if p < 0:
+                continue
+            y = ofdm_rx(rx[p:], k)
+            scores = []
+            for r in range(repeats):
+                a = r * payload_info["framed_symbols_once"]
+                b = a + payload_info["framed_symbols_once"]
+                if b > len(y):
+                    break
+                score = comb_pilot_residual(
+                    y[a:b],
+                    h0,
+                    payload_info["comb_pilots"],
+                    payload_info["fband_profile"]["pilot_idx"],
+                )
+                if np.isfinite(score):
+                    scores.append(score)
+            score = float(np.mean(scores)) if scores else np.nan
+            if np.isfinite(score) and score < best[0]:
+                best = (score, p, d)
+        return best[1], best[2], best[0]
+
+    data_symbols = payload_info["data_symbols"]
+    pilots = payload_info["pilots"]
+    framed_symbols_once = payload_info["framed_symbols_once"]
     if interval <= 0 or len(pilots) == 0 or data_symbols == 0:
         return p0, 0, np.nan
     best = (np.inf, p0, 0)
@@ -306,11 +377,9 @@ def run_one(receive, out, a, k, probe_x, probe_wave, sync_x, sync_wave, combo_ga
         k,
         structural_payload_start,
         h_sync,
-        payload_info["data_symbols"],
-        payload_info["pilots"],
+        payload_info,
         a.pilot_interval,
         a.pilot_len,
-        payload_info["framed_symbols_once"],
         a.payload_repeats,
         a.payload_search,
     )
@@ -319,7 +388,26 @@ def run_one(receive, out, a, k, probe_x, probe_wave, sync_x, sync_wave, combo_ga
     decoded_repeats = []
     pilot_h_parts = []
     pilot_residuals = []
-    if a.payload_repeats > 1 or (a.pilot_interval > 0 and len(payload_info["pilots"]) > 0):
+    if payload_info.get("comb_pilots") is not None:
+        for r in range(a.payload_repeats):
+            a0 = r * payload_info["framed_symbols_once"]
+            b0 = a0 + payload_info["framed_symbols_once"]
+            yr = payload_y[a0:b0]
+            zr, phr, score = comb_pilot_decode(yr, h_sync, payload_info, a.pilot_smooth)
+            z_repeats.append(zr)
+            decoded_repeats.append(symbols_to_bytes(zr, a.mod))
+            if len(phr):
+                pilot_h_parts.append(phr)
+            if np.isfinite(score):
+                pilot_residuals.append(score)
+        z = z_repeats[0] if z_repeats else np.empty((0, len(payload_info["fband_profile"]["data_idx"])), complex)
+        pilot_h = np.vstack(pilot_h_parts) if pilot_h_parts else np.empty((0, len(k)), complex)
+        pilot_residual = float(np.mean(pilot_residuals)) if pilot_residuals else np.nan
+        if a.repeat_combine == "soft" and a.mod == "bpsk":
+            decoded = bytes_from_bpsk_soft(z_repeats)
+        else:
+            decoded = vote_repeat_bytes(decoded_repeats)
+    elif a.payload_repeats > 1 or (a.pilot_interval > 0 and len(payload_info["pilots"]) > 0):
         for r in range(a.payload_repeats):
             a0 = r * payload_info["framed_symbols_once"]
             b0 = a0 + payload_info["framed_symbols_once"]
@@ -420,6 +508,7 @@ def run_one(receive, out, a, k, probe_x, probe_wave, sync_x, sync_wave, combo_ga
         "pilot_len": int(a.pilot_len),
         "pilot_smooth": int(a.pilot_smooth),
         "pilot_symbols": int(len(payload_info["pilots"])),
+        "comb_pilot_bins": int(len(payload_info.get("comb_pilot_bins", []))),
         "data_symbols": int(payload_info["data_symbols"]),
         "payload_repeats": int(a.payload_repeats),
         "repeat_combine": a.repeat_combine,
@@ -428,6 +517,7 @@ def run_one(receive, out, a, k, probe_x, probe_wave, sync_x, sync_wave, combo_ga
     }
     if metrics:
         result.update(metrics)
+    result.update(profile_meta(payload_info.get("fband_profile")))
     result["repeat_bit_error_rates"] = [
         None if m is None else m["bit_error_rate"] for m in repeat_metrics
     ]
@@ -458,12 +548,34 @@ def main():
         raise SystemExit("--pilot-len must be >= 1")
     if a.payload_repeats < 1:
         raise SystemExit("--payload-repeats must be >= 1")
-    k = bins(*a.bins)
+    profile = fband_profile(a.fband_profile)
+    k = profile["k"] if profile else bins(*a.bins)
     probe_raw = probe_symbols(a.probe_kind, k, a.probe_symbols, a.probe_seed)
-    payload = file_symbols(a.source, k, a.mod) if a.source.exists() else np.zeros((0, len(k)), complex)
-    n_pilots = pilot_count(len(payload), a.pilot_interval, a.pilot_len)
-    pilots = probe_symbols(a.pilot_kind, k, n_pilots, a.pilot_seed)
-    framed_payload_once = frame_payload(payload, pilots, a.pilot_interval, a.pilot_len)
+    if profile:
+        if a.pilot_interval > 0:
+            raise SystemExit("--fband-profile uses per-symbol comb pilots; leave --pilot-interval at 0")
+        if a.source.exists():
+            payload, comb_pilots = file_symbols_with_comb_pilots(
+                a.source,
+                k,
+                profile["data_idx"],
+                profile["pilot_idx"],
+                a.mod,
+                a.pilot_seed,
+                a.pilot_kind,
+            )
+        else:
+            payload = np.zeros((0, len(k)), complex)
+            comb_pilots = np.zeros((0, len(profile["pilot_idx"])), complex)
+        n_pilots = 0
+        pilots = np.empty((0, len(k)), complex)
+        framed_payload_once = payload
+    else:
+        payload = file_symbols(a.source, k, a.mod) if a.source.exists() else np.zeros((0, len(k)), complex)
+        comb_pilots = None
+        n_pilots = pilot_count(len(payload), a.pilot_interval, a.pilot_len)
+        pilots = probe_symbols(a.pilot_kind, k, n_pilots, a.pilot_seed)
+        framed_payload_once = frame_payload(payload, pilots, a.pilot_interval, a.pilot_len)
     framed_payload = np.vstack([framed_payload_once] * a.payload_repeats)
     probe_wave = ofdm_tx(probe_raw, k)
     sync_raw = preamble_symbols(k, a.sync_symbols, a.sync_seed)
@@ -475,8 +587,12 @@ def main():
     probe_x = probe_raw * combo_gain
     sync_x = sync_raw * combo_gain
     payload_info = {
+        "k": k,
+        "fband_profile": profile,
         "data_symbols": int(len(payload)),
         "pilots": pilots * combo_gain,
+        "comb_pilots": None if comb_pilots is None else comb_pilots * combo_gain,
+        "comb_pilot_bins": [] if profile is None else profile["pilot_bins"],
         "framed_symbols_once": int(len(framed_payload_once)),
     }
 

@@ -17,12 +17,14 @@ from audiomodem import (
     wav_gain,
     write_wav,
 )
+from fband import fband_profile, file_symbols_with_comb_pilots, profile_meta
 
 
 def args():
     p = argparse.ArgumentParser(description="make one-shot probe + file OFDM wav")
     p.add_argument("input", nargs="?", type=Path, default=Path("data/step2_file/exp2.txt"))
     p.add_argument("--bins", nargs=2, type=int, default=(8, 150), metavar=("START", "END"))
+    p.add_argument("--fband-profile", choices=["conservative", "trimmed"], default=None)
     p.add_argument("--mod", choices=MODS, default="qpsk")
     p.add_argument("--probe-kind", choices=["ones", "chirp", "step", "bandstep", "random"], default="ones")
     p.add_argument("--probe-symbols", type=int, default=256)
@@ -64,12 +66,30 @@ def main():
         raise SystemExit("--pilot-len must be >= 1")
     if a.payload_repeats < 1:
         raise SystemExit("--payload-repeats must be >= 1")
-    k = bins(*a.bins)
+    profile = fband_profile(a.fband_profile)
+    k = profile["k"] if profile else bins(*a.bins)
     probe = probe_symbols(a.probe_kind, k, a.probe_symbols, a.probe_seed)
-    data_payload = file_symbols(a.input, k, a.mod)
-    n_pilots = pilot_count(len(data_payload), a.pilot_interval, a.pilot_len)
-    pilots = probe_symbols(a.pilot_kind, k, n_pilots, a.pilot_seed)
-    payload_once = frame_payload(data_payload, pilots, a.pilot_interval, a.pilot_len)
+    if profile:
+        if a.pilot_interval > 0:
+            raise SystemExit("--fband-profile uses per-symbol comb pilots; leave --pilot-interval at 0")
+        data_payload, comb_pilots = file_symbols_with_comb_pilots(
+            a.input,
+            k,
+            profile["data_idx"],
+            profile["pilot_idx"],
+            a.mod,
+            a.pilot_seed,
+            a.pilot_kind,
+        )
+        n_pilots = 0
+        pilots = np.empty((0, len(k)), complex)
+        payload_once = data_payload
+    else:
+        data_payload = file_symbols(a.input, k, a.mod)
+        comb_pilots = np.empty((0, 0), complex)
+        n_pilots = pilot_count(len(data_payload), a.pilot_interval, a.pilot_len)
+        pilots = probe_symbols(a.pilot_kind, k, n_pilots, a.pilot_seed)
+        payload_once = frame_payload(data_payload, pilots, a.pilot_interval, a.pilot_len)
     payload = np.vstack([payload_once] * a.payload_repeats)
     probe_wave = ofdm_tx(probe, k)
     sync_wave = preamble_wave(k, a.sync_symbols, a.sync_seed)
@@ -85,6 +105,7 @@ def main():
         "fs": FS,
         "symbol_len": L,
         "bins": [int(k[0]), int(k[-1])],
+        "bin_list": [int(x) for x in k],
         "mod": a.mod,
         "bits_per_symbol": bits_per_symbol(a.mod),
         "probe_kind": a.probe_kind,
@@ -93,6 +114,7 @@ def main():
         "sync_symbols": int(a.sync_symbols),
         "sync_seed": int(a.sync_seed),
         "data_symbols": int(len(data_payload)),
+        "comb_pilot_symbols": int(len(comb_pilots)),
         "pilot_symbols": int(n_pilots),
         "pilot_interval": int(a.pilot_interval),
         "pilot_len": int(a.pilot_len),
@@ -110,12 +132,14 @@ def main():
         "total_samples": int(len(raw)),
         "seconds": float(len(raw) / FS),
     }
+    meta.update(profile_meta(profile))
     a.out.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
-    print(f"wrote {a.out} mod={a.mod} bins={k[0]}-{k[-1]} seconds={len(raw) / FS:.3f}")
+    label = a.fband_profile or f"{k[0]}-{k[-1]}"
+    print(f"wrote {a.out} mod={a.mod} bins={label} active_bins={len(k)} seconds={len(raw) / FS:.3f}")
     print(
         f"probe_symbols={len(probe)} sync_symbols={a.sync_symbols} "
-        f"data_symbols={len(data_payload)} pilot_symbols={n_pilots} "
+        f"data_symbols={len(data_payload)} pilot_symbols={n_pilots} comb_pilot_symbols={len(comb_pilots)} "
         f"payload_symbols_once={len(payload_once)} payload_repeats={a.payload_repeats} "
         f"payload_symbols={len(payload)}"
     )
