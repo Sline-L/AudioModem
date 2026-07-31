@@ -184,8 +184,14 @@ def probe_symbols(kind, k, n, seed=2026, bandstep_parts=16):
             b = min(a + band, len(k))
             s[i, a:b] = 1
         return s
+    if kind == "singlebin":
+        dwell = max(1, n // len(k))
+        q = np.minimum(np.arange(n) // dwell, len(k) - 1)
+        s = np.zeros((n, len(k)), complex)
+        s[np.arange(n), q] = 1
+        return s
     if kind == "random":
         rng = np.random.default_rng(seed)
         b = rng.integers(0, 2, (n, len(k), 2))
         return np.where(b[:, :, 1], -1, 1) + 1j * np.where(b[:, :, 0], -1, 1)
-    raise ValueError("kind must be ones, chirp, step, bandstep, or random")
+    raise ValueError("kind must be ones, chirp, step, bandstep, singlebin, or random")
