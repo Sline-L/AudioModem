@@ -164,7 +164,7 @@ def file_symbols(path, k, mod="qpsk"):
     return s.reshape(n, len(k))
 
 
-def probe_symbols(kind, k, n, seed=2026):
+def probe_symbols(kind, k, n, seed=2026, bandstep_parts=16):
     t = np.arange(n)[:, None]
     f = np.arange(len(k))[None, :]
     if kind == "ones":
@@ -175,7 +175,7 @@ def probe_symbols(kind, k, n, seed=2026):
         q = np.floor(t * 16 / max(1, n)).astype(int)
         return np.exp(2j * np.pi * q * f / max(1, len(k)))
     if kind == "bandstep":
-        parts = min(16, len(k), n)
+        parts = min(bandstep_parts, len(k), n)
         band = int(np.ceil(len(k) / parts))
         q = np.minimum(np.arange(n) * parts // n, parts - 1)
         s = np.zeros((n, len(k)), complex)
