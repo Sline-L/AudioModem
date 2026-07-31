@@ -1,0 +1,16 @@
+{
+  "runs": [
+    17,
+    18,
+    19
+  ],
+  "decoded_len": 4433,
+  "truth_len": 4416,
+  "bit_errors": 1445,
+  "byte_errors": 1074,
+  "bit_error_rate": 0.04090240036231884,
+  "first64_hex": "657870322e747874003574203211c46869732169732061207061737620e6694c552e20546269732069732069207465737462e4696c652e205468697320697320",
+  "first128_text": "exp2.txt\u00005t 2\u0011\ufffdhis!is a pasv \ufffdiLU. Tbis is i testb\ufffdile. This is ` te\ufffdt fi\ufffde. ThIs0ms l tesd file> \nt`is is a test F\ufffdle. Tlis i3 ",
+  "header_ok": false,
+  "error": "ValueError: invalid literal for int() with base 10: b'5t 2\\x11\\xc4his!is a pasv \\xe6iLU. Tbis is i testb\\xe4ile. This is ` te\\xf3t fi\\xece. ThIs0ms l tesd file> \\nt`is is a test F\\xe9le. Tlis i3 a test fqlm. Thi\\xd3 is q\"tesT fH,e. Dhis iw c TeSv file."
+}

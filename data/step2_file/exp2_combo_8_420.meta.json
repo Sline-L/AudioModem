@@ -1,0 +1,26 @@
+{
+  "input": "data/step2_file/exp2.txt",
+  "out": "data/step2_file/exp2_combo_8_420.wav",
+  "fs": 48000,
+  "symbol_len": 1152,
+  "bins": [
+    8,
+    420
+  ],
+  "mod": "qpsk",
+  "bits_per_symbol": 2,
+  "probe_kind": "ones",
+  "probe_symbols": 256,
+  "probe_seed": 2026,
+  "sync_symbols": 32,
+  "sync_seed": 2026,
+  "payload_symbols": 43,
+  "gain": 1.1776880296610168,
+  "probe_samples": 294912,
+  "sync_samples": 36864,
+  "payload_samples": 49536,
+  "file_preamble_start": 294912,
+  "payload_start": 331776,
+  "total_samples": 381312,
+  "seconds": 7.944
+}

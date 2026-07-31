@@ -1,0 +1,4 @@
+input,probe_sync_score,file_sync_score,payload_start,mean_abs_h,header_ok,file_match,byte_errors,bit_errors,bit_error_rate,first16_hex,error
+data/step2_file/receive_exp2_combo_8_150_2.wav,0.08107434375524383,0.028142461382564578,557515,0.19634678670069364,False,False,4410,30079,0.8514209692028986,777c79f4d4ddefc5000017f508651026,UnicodeDecodeError: 'utf-8' codec can't decode byte 0xf4 in position 3: invalid continuation byte
+data/step2_file/receive_exp2_combo_8_150_3.wav,0.12434887691396854,0.026506653273116715,590662,0.31122810142260793,False,False,4416,34213,0.9684386322463768,3074a782a4a4ad2948737b41d6acf3d3,ValueError: subsection not found
+data/step2_file/receive_exp2_combo_8_150_4.wav,0.21640008243303369,0.21686069221154647,370608,1.1667097160494517,False,False,4380,17303,0.4897814764492754,6f8e7fcf20ca09ca284bf02faa7f44c5,UnicodeDecodeError: 'utf-8' codec can't decode byte 0x8e in position 1: invalid start byte

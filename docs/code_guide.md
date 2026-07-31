@@ -265,6 +265,179 @@ mean_abs_h≈1
 - `sync_score`：同步相关分数，越接近 1 越好。真实录音明显低于 1 是正常的，但太低说明录音弱、噪声大或参数不匹配。
 - `mean_abs_h`：平均信道幅度。它会包含扬声器音量、麦克风增益和空气信道。
 
+## 6. `tx_combo.py`
+
+`tx_combo.py` 负责生成“一次播放”的合并 WAV，把信道训练 probe 和文件发送放在同一个音频里。
+
+### 数据流
+
+```text
+[probe训练段][文件同步头][文件payload] -> WAV
+```
+
+默认用于 `exp2.txt` 的 `8..150` 子载波实验：
+
+```bash
+python tx_combo.py
+```
+
+这会生成：
+
+- `data/step2_file/exp2_combo_8_150.wav`：你需要播放的唯一音频。
+- `data/step2_file/exp2_combo_8_150.probe.npy`：写出 WAV 后带缩放系数的理论 probe 符号。
+- `data/step2_file/exp2_combo_8_150.meta.json`：记录 probe、同步头、payload 的长度和起点。
+
+默认结构是：
+
+```text
+256 个 probe OFDM symbols
+32 个 file preamble OFDM symbols
+124 个 exp2.txt payload OFDM symbols
+```
+
+当前 `exp2.txt` 的 `8_150` 合并音频时长约 `9.888 s`。
+
+### 参数
+
+- `input`：要发送的源文件，默认 `data/step2_file/exp2.txt`。
+- `--bins START END`：默认 `8 150`。
+- `--mod bpsk|qpsk|qam16`：默认 `qpsk`。
+- `--probe-kind ones|chirp|step|bandstep|random`：默认 `ones`。
+- `--probe-symbols N`：默认 `256`。
+- `--probe-seed N`：默认 `2026`。
+- `--sync-symbols N`：文件同步头长度，默认 `32`。
+- `--sync-seed N`：文件同步头随机种子，默认 `2026`。
+- `--pilot-interval N`：每隔多少个 data OFDM symbols 插入 1 个整符号 pilot。默认 `0`，表示不插 pilot。
+- `--pilot-len N`：每次插入连续多少个 pilot OFDM symbols，默认 `1`。多个 pilot 会在接收端平均估计 H。
+- `--pilot-kind ones|chirp|step|bandstep|random`：pilot 类型，默认 `random`。
+- `--pilot-seed N`：pilot 随机种子，默认 `2027`。
+- `--payload-repeats N`：同一个 framed payload 在一段音频中重复几遍，默认 `1`。接收端会对多遍 bit 做多数投票。
+- `--out path.wav`：输出 WAV 路径。
+
+### BPSK + pilot 推荐实验
+
+当前真实声学链路优先测试更稳的 BPSK、128 个 file preamble symbols、每 4 个 data symbols 插入 1 个 pilot：
+
+```bash
+python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav
+```
+
+当前 `exp2.txt` 会生成：
+
+```text
+256 个 probe OFDM symbols
+128 个 file preamble OFDM symbols
+248 个 BPSK data OFDM symbols
+62 个 pilot OFDM symbols
+```
+
+音频时长约 `16.656 s`。真实录音建议录 `19 s` 或更长，给播放前后各留约 1 秒余量。
+
+更稳的单段音频实验使用 BPSK、128 个 file preamble symbols、每 4 个 data symbols 插入 2 个 pilot，并把 payload 重复 3 遍：
+
+```bash
+python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav
+```
+
+当前 `exp2.txt` 会生成：
+
+```text
+256 个 probe OFDM symbols
+128 个 file preamble OFDM symbols
+248 个 BPSK data OFDM symbols
+124 个 pilot OFDM symbols
+单次 framed payload 372 个 OFDM symbols
+payload 重复 3 遍
+```
+
+音频时长约 `36.000 s`。真实录音建议录 `39-40 s`。
+
+## 7. `rx_combo.py`
+
+`rx_combo.py` 负责从一次播放的录音中先估计当前 `H`，再恢复后面的文件。
+
+### 数据流
+
+```text
+录音 WAV -> probe 同步 -> H = Y_probe / X_probe
+         -> 文件同步头二次同步/估 H -> payload FFT -> pilot 跟踪 H -> 判决 -> unpack -> 文件
+```
+
+离线自检：
+
+```bash
+python rx_combo.py data/step2_file/exp2_combo_8_150.wav --out runs/step2_file/combo_8_150/offline
+```
+
+真实实验时，你只需要播放：
+
+```text
+data/step2_file/exp2_combo_8_150.wav
+```
+
+然后把录音保存成：
+
+```text
+data/step2_file/receive_exp2_combo_8_150_1.wav
+```
+
+再运行：
+
+```bash
+python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav --out runs/step2_file/combo_8_150/1
+```
+
+批量分析 5 组录音：
+
+```bash
+python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav data/step2_file/receive_exp2_combo_8_150_2.wav data/step2_file/receive_exp2_combo_8_150_3.wav data/step2_file/receive_exp2_combo_8_150_4.wav data/step2_file/receive_exp2_combo_8_150_5.wav --out runs/step2_file/combo_8_150
+```
+
+BPSK + pilot 接收：
+
+```bash
+python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/1
+```
+
+BPSK + pilot 平均 + payload 重复投票接收：
+
+```bash
+python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/1
+```
+
+接收端默认会在 probe 后面 `±8192` samples 范围内重新寻找 file preamble。这个范围用于处理 `ones` probe 带来的整 OFDM symbol 起点歧义。
+
+调试真实录音时可以加：
+
+```bash
+--file-sync-mode best --pilot-smooth 8 --repeat-combine soft
+```
+
+- `--file-sync-mode best`：同时做 probe 附近搜索和全局 file preamble 搜索，自动选同步分数更高的峰；当 `ones` probe 把起点带偏时，这个选项能救回 file sync。
+- `--pilot-smooth N`：对连续 pilot 估计出的 `H` 做时间平滑，真实录音中 `N=8` 当前表现比逐个 pilot 直接使用更稳。
+- `--repeat-combine soft`：BPSK + payload repeats 时用均衡后实部软合并，而不是每遍硬判决后多数投票。
+
+### 输出
+
+每组输出目录中会有：
+
+- `H.npy` / `H_sync.npy`：file preamble 估计出的复数信道响应。
+- `H_probe.npy`：最前面 probe 估计出的复数信道响应。
+- `pilot_H.npy`：启用 pilot 时，每个 pilot 更新后的 H。
+- `Y_probe.npy` / `Y_probe_theory.npy`：接收和理论 probe 频域符号。
+- `Y_sync.npy` / `Y_sync_theory.npy`：接收和理论 file preamble 频域符号。
+- `rx_symbols.npy`：均衡后的 payload 星座点。
+- `rx_symbols_repeatN.npy`：启用 `--payload-repeats` 时，每一遍 payload 独立均衡后的星座点。
+- `decoded_raw.bin`：判决出的原始 byte 流，即使解包失败也会保存。
+- `decoded_raw_repeatN.bin`：启用 `--payload-repeats` 时，每一遍 payload 独立判决出的 byte 流。
+- `summary.csv`：每个 bin 的 `H` 幅度和相位。
+- `metrics.json`：同步分数、payload 起点、pilot residual、每遍 repeat BER、投票后 BER、`mean_abs_h`、是否成功识别文件头、是否和源文件完全一致等指标。
+- 恢复出的文件，例如 `exp2.txt`。
+
+批量模式额外输出：
+
+- `batch_summary.csv`：每组录音的同步分数、BER、是否完全恢复等汇总。
+
 ## 推荐实验顺序
 
 1. 离线文件闭环：
@@ -297,7 +470,46 @@ mean_abs_h≈1
    python rx.py data/rx/receive_file16.wav --bins 8 150 --h runs/probe_ones_8_150/H.npy --out runs/recovered_real
    ```
 
-5. 批量组合测试：
+5. 一次播放 combo 实验：
+
+   ```bash
+   python tx_combo.py
+   python rx_combo.py data/step2_file/exp2_combo_8_150.wav --out runs/step2_file/combo_8_150/offline
+   ```
+
+   离线通过后，播放 `data/step2_file/exp2_combo_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_8_150_1.wav`，再运行：
+
+   ```bash
+   python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav --out runs/step2_file/combo_8_150/1
+   ```
+
+6. BPSK + pilot 稳定恢复实验：
+
+   ```bash
+   python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav
+   python rx_combo.py data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/offline
+   ```
+
+   离线通过后，播放 `data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav`，再运行：
+
+   ```bash
+   python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/1
+   ```
+
+7. BPSK + pilot 平均 + payload 重复投票实验：
+
+   ```bash
+   python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav
+   python rx_combo.py data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/offline
+   ```
+
+   离线通过后，播放 `data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav`，再运行：
+
+   ```bash
+   python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/1
+   ```
+
+8. 批量组合测试：
 
    依次测试：
 

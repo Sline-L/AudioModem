@@ -1,0 +1,22 @@
+{
+  "input": "data/step2_file/receive_exp2_combo_8_420_4.wav",
+  "out": "runs/step2_file/combo_8_420/batch_1_4/4",
+  "probe_start": 64689,
+  "probe_sync_score": 0.09619530900959743,
+  "file_sync_start": 359652,
+  "file_sync_score": 0.12573423167627915,
+  "payload_start": 396516,
+  "mean_abs_h": 0.5943590756905942,
+  "header_ok": false,
+  "file_match": false,
+  "recovered_name": "",
+  "recovered_bytes": 0,
+  "first16_hex": "9a1ca030498278ed43ca82d030362204",
+  "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0x9a in position 0: invalid start byte",
+  "combo_gain": 1.1776880296610168,
+  "decoded_len": 7434,
+  "truth_len": 4416,
+  "byte_errors": 4298,
+  "bit_errors": 17192,
+  "bit_error_rate": 0.48663949275362317
+}

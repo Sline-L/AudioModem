@@ -1,0 +1,22 @@
+{
+  "input": "data/step2_file/receive_exp2_combo_8_200_3.wav",
+  "out": "runs/step2_file/combo_8_200/batch_1_4/3",
+  "probe_start": 37932,
+  "probe_sync_score": 0.1876044587312768,
+  "file_sync_start": 333065,
+  "file_sync_score": 0.03801138793698729,
+  "payload_start": 369929,
+  "mean_abs_h": 0.7785404494186635,
+  "header_ok": false,
+  "file_match": false,
+  "recovered_name": "",
+  "recovered_bytes": 0,
+  "first16_hex": "7147cf136d37829c1677e57155556755",
+  "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xcf in position 2: invalid continuation byte",
+  "combo_gain": 2.5201303432642486,
+  "decoded_len": 9601,
+  "truth_len": 4416,
+  "byte_errors": 4403,
+  "bit_errors": 17814,
+  "bit_error_rate": 0.5042459239130435
+}

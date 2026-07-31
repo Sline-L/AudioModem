@@ -1,0 +1,23 @@
+{
+  "runs": [
+    18,
+    17,
+    19,
+    6,
+    5,
+    9,
+    10,
+    11,
+    7,
+    8,
+    3,
+    4,
+    1,
+    2,
+    16
+  ],
+  "bit_errors": 684,
+  "byte_errors": 494,
+  "ber": 0.01936141304347826,
+  "first128_text": "exp2.vxt\u000040\u00102\u0000Dhis is a test(fide. This is a te\ufffdt file. This is a test file. This is a test filen \nThis is0a test fild. This is "
+}

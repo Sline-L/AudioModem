@@ -1,0 +1,10 @@
+{
+  "path": "data/step2_file/receive_exp2_combo_8_150_1.wav",
+  "samples": 600000,
+  "seconds": 12.5,
+  "peak_abs": 1.0,
+  "rms": 0.1654590569263126,
+  "near_clip_samples_abs_gt_0_98": 5,
+  "near_clip_ratio_abs_gt_0_98": 8.333333333333334e-06,
+  "mean": -0.00019841110229492186
+}

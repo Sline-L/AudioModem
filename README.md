@@ -4,6 +4,7 @@
 
 英文说明见 [docs/README.md](docs/README.md)。
 代码详解见 [docs/code_guide.md](docs/code_guide.md)。
+技术路线见 [docs/technical_route.md](docs/technical_route.md)。
 
 ## 结构
 

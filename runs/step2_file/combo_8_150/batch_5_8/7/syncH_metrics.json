@@ -1,0 +1,15 @@
+{
+  "run": 7,
+  "probe_start": 44176,
+  "probe_sync_score": 0.2105824475029799,
+  "payload_start_structural": 375952,
+  "best_payload_delta": -2,
+  "best_payload_start": 375950,
+  "mean_abs_h_sync": 2.10846476698478,
+  "median_abs_h_sync": 1.1229569855356598,
+  "bit_error_rate": 0.15358922101449277,
+  "bit_errors": 5426,
+  "byte_errors": 2615,
+  "first16_hex": "657870322e747834ea343410dea8222f",
+  "header_ok": false
+}

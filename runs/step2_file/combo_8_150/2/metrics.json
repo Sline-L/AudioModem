@@ -1,0 +1,22 @@
+{
+  "input": "data/step2_file/receive_exp2_combo_8_150_2.wav",
+  "out": "runs/step2_file/combo_8_150/2",
+  "probe_start": 253448,
+  "probe_sync_score": 0.09612968120907321,
+  "file_sync_start": 562107,
+  "file_sync_score": 0.008513253498865265,
+  "payload_start": 598971,
+  "mean_abs_h": 0.2450760590716522,
+  "header_ok": false,
+  "file_match": false,
+  "recovered_name": "",
+  "recovered_bytes": 0,
+  "first16_hex": "",
+  "error": "ValueError: subsection not found",
+  "combo_gain": 3.401294798951049,
+  "decoded_len": 0,
+  "truth_len": 4416,
+  "byte_errors": 4416,
+  "bit_errors": 35328,
+  "bit_error_rate": 1.0
+}
