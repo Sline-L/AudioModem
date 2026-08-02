@@ -1,6 +1,15 @@
-# Python cache and local environments
+# Python cache, packaging, and local environments
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
 .python-version
 .venv/
 venv/
@@ -11,12 +20,25 @@ env/
 Thumbs.db
 .idea/
 .vscode/
+*~
+*.swp
+*.swo
 
 # Codex/session metadata
 .git/
 .agents/
 .codex/
 .git_repo/
+
+# Generated modem artifacts from local experiments
+data/tx/*
+data/rx/*
+runs/*
+data/step5_singlebin_sweep/*
+!data/tx/.gitkeep
+!data/rx/.gitkeep
+!runs/.gitkeep
+!data/step5_singlebin_sweep/.gitkeep
 
 # Large generated artifacts that exceed normal GitHub limits
 archive/tmp/

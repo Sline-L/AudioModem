@@ -1,6 +1,28 @@
 # 技术路线简要总结
 
-本项目的目标是用 48 kHz 声音信号完成真实声学信道下的 OFDM 文件传输。整体路线分为三步：先估计信道 `H`，再利用 `H` 恢复真实 payload，最后通过分段扫频调整实际可用频段。
+本项目的目标是用 48 kHz 声音信号完成真实声学信道下的 OFDM 文件传输。早期路线分为三步：先估计信道 `H`，再利用 `H` 恢复真实 payload，最后通过分段扫频调整实际可用频段。Step4-Step6 已证明固定扫频结果会随房间和位置变化，因此当前主路线转为 Step7：宽候选频带、同帧训练、在线时钟跟踪、旋转 pilot、软判决 FEC 和逐块 CRC。
+
+Step7 详细设计和当前问题见 [`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
+
+## 当前主路线：Step7
+
+```text
+[noise-only][short sync][full-band preamble x2]
+[strong coded header x3]
+[single payload: rotating pilots + interleaved convolutional code + block CRC]
+```
+
+- 扫频只用于确定跨设备候选频带，不再永久删除某个房间中的一次坏点。
+- sync+preamble 给出初始 H、噪声和采样时钟比例。
+- rotating pilot 跟踪 payload 中的公共相位和频率选择性变化。
+- BPSK soft LLR 进入 rate-1/2 K=7 Viterbi；每 512 bytes 独立 CRC32。
+- 下一阶段优先解决长 payload 的采样时钟估计，不继续依据单次扫频删 bins。
+
+当前 TIFF 录音证明，稳定电平下仅 `8.77 ppm` 的时钟估计偏差也会在约 67 秒内累计
+`27.6 samples`。正式解码关闭 slope 时只有 `15/26` blocks 通过；诊断性地使用全段
+真实比例后，裸 BER 降到 `1.39%-1.57%`，FEC 恢复 `26/26` blocks。下一版应在 payload
+插入周期性 timing anchors，或对 pilot phase slope 做长时间稳健估计，再缓慢调整重采样
+比例。
 
 ## 1. 信道估计
 
@@ -68,4 +90,3 @@ python rx.py data/rx/receive_file16.wav --mod qpsk --bins 8 200 --h runs/H_avg.n
 python probe.py --kind bandstep --bins 8 420 --symbols 512 --out data/tx/probe_bandstep_8_420.wav
 python analyze.py data/rx/receive_bandstep.wav --kind bandstep --bins 8 420 --symbols 512 --out runs/probe_bandstep_8_420
 ```
-

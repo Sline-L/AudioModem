@@ -4,6 +4,11 @@ AudioModem is organized around real acoustic channel experiments. The main pipel
 
 Detailed Chinese code guide: [code_guide.md](code_guide.md).
 
+Experiment history: [experiment_history.md](experiment_history.md).
+
+Step7 frame design, soft FEC, timing recovery, TIFF experiment, and the current
+sample-clock problem: [step7_adaptive_fec.md](step7_adaptive_fec.md).
+
 ## Layout
 
 - `audiomodem.py`: compact shared WAV, OFDM, modulation, sync, and probe helpers.
@@ -14,6 +19,8 @@ Detailed Chinese code guide: [code_guide.md](code_guide.md).
 - `data/`: source files, transmit WAVs, and recorded receive WAVs.
 - `runs/`: experiment outputs.
 - `archive/week2_challenge/`: old Week 2 challenge code and generated results.
+- `step7_modem.py`, `tx_step7.py`, `rx_step7.py`: independent `N=512, CP=256`
+  rotating-pilot and soft-FEC experiment pipeline.
 
 ## Quick Run
 

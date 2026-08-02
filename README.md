@@ -5,6 +5,8 @@
 英文说明见 [docs/README.md](docs/README.md)。
 代码详解见 [docs/code_guide.md](docs/code_guide.md)。
 技术路线见 [docs/technical_route.md](docs/technical_route.md)。
+Step7 的帧结构、FEC、时钟跟踪和当前问题详见
+[docs/step7_adaptive_fec.md](docs/step7_adaptive_fec.md)。
 
 ## 结构
 
@@ -16,6 +18,10 @@
 - `data/`：`source/` 原文件，`tx/` 发送 WAV，`rx/` 录音。
 - `runs/`：实验输出。
 - `archive/week2_challenge/`：旧 Week2 challenge 代码和结果归档。
+
+当前稳健传输实验使用独立的 `tx_step7.py`、`rx_step7.py` 和 `step7_modem.py`：
+`N=512, CP=256`、旋转 comb pilot、软判决卷积码、512-byte CRC blocks。Step7 不覆盖
+旧版 `audiomodem.py` 的默认参数。
 
 ## 常用命令
 

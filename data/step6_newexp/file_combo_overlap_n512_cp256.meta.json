@@ -1,0 +1,82 @@
+{
+  "input": "data/step6_newexp/file.jpeg",
+  "out": "data/step6_newexp/file_combo_overlap_n512_cp256.wav",
+  "fs": 48000,
+  "mod": "bpsk",
+  "bits_per_symbol": 1,
+  "probe_symbols_per_repeat": 256,
+  "probe_repeats": 3,
+  "probe_symbols_total": 768,
+  "probe_seed": 2026,
+  "sync_symbols_per_repeat": 128,
+  "sync_repeats": 3,
+  "sync_symbols_total": 384,
+  "sync_seed": 3026,
+  "payload_repeats": 1,
+  "payload_symbols": 5226,
+  "pilot_seed": 2027,
+  "gain": 13.636073097495093,
+  "probe_samples": 589824,
+  "sync_samples": 294912,
+  "payload_samples": 4013568,
+  "file_preamble_start": 589824,
+  "payload_start": 884736,
+  "total_samples": 4898304,
+  "seconds": 102.048,
+  "fft_size": 512,
+  "cp_samples": 256,
+  "symbol_len": 768,
+  "symbol_seconds": 0.016,
+  "active_ranges": [
+    [
+      158,
+      174
+    ]
+  ],
+  "active_bins": [
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174
+  ],
+  "data_bins": [
+    159,
+    160,
+    161,
+    163,
+    164,
+    165,
+    167,
+    168,
+    169,
+    171,
+    172,
+    173
+  ],
+  "pilot_bins": [
+    158,
+    162,
+    166,
+    170,
+    174
+  ],
+  "active_frequencies_hz": [
+    14812.5,
+    16312.5
+  ],
+  "data_bin_count": 12,
+  "pilot_bin_count": 5
+}

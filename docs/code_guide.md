@@ -1,6 +1,10 @@
 # 代码功能与用法详解
 
-这份文档说明当前新结构下每个脚本的作用。主流程固定为：采样率 `48000 Hz`，FFT 点数 `1024`，循环前缀 `128`。
+这份文档说明当前新结构下每个脚本的作用。旧版通用流程默认采样率 `48000 Hz`、FFT 点数 `1024`、循环前缀 `128`；Step6 和 Step7 使用独立参数，不会覆盖旧实验。
+
+实验路线、关键结果和每次方案调整的原因记录在 [`experiment_history.md`](experiment_history.md)。
+Step7 的完整帧格式、算法和当前时钟问题见
+[`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
 
 ## 1. `audiomodem.py`
 
@@ -70,6 +74,7 @@
   - `chirp`：所有目标频点幅度为 1，相位随时间和频点平滑变化，像连续线性扫频。
   - `step`：所有目标频点幅度为 1，但相位按时间分成 16 档跳变，像阶梯状全频扫频。
   - `bandstep`：每个时间段只激励一段连续 bins，下一时间段跳到下一段；这是部分区间、阶梯状扫频。
+  - `singlebin`：每个时间段只激励一个 bin，按 bins 顺序逐点扫频；适合找很窄的坏频点。
   - `random`：随机 QPSK，主要用于调试和对比。
 
 ## 2. `tx.py`
@@ -193,16 +198,25 @@ python probe.py --kind chirp --bins 8 200 --symbols 256 --out data/tx/probe_chir
 python probe.py --kind step --bins 8 420 --symbols 256 --out data/tx/probe_step_8_420.wav
 python probe.py --kind bandstep --bins 8 150 --symbols 256 --out data/tx/probe_bandstep_8_150.wav
 python probe.py --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out data/tx/probe_bandstep_full_64parts_long.wav
+python probe.py --kind singlebin --bins 1 511 --symbols 32704 --out data/step5_singlebin_sweep/probe_singlebin_full_1p5s.wav
 ```
 
 ### 参数
 
-- `--kind ones|chirp|step|bandstep|random`：训练信号类型。
+- `--kind ones|chirp|step|bandstep|singlebin|random`：训练信号类型。
 - `--bins START END`：训练覆盖的子载波范围。
 - `--symbols N`：训练 OFDM 符号数。默认 `256`，时长约 `256 * 1152 / 48000 = 6.144 s`。
 - `--seed N`：`random` 训练使用的随机种子。
 - `--bandstep-parts N`：`bandstep` 划分的连续频带数，默认 `16`；发送和分析时必须一致。
 - `--out path.wav`：输出 probe WAV。
+
+逐点全频扫频推荐：
+
+```bash
+python probe.py --kind singlebin --bins 1 511 --symbols 32704 --out data/step5_singlebin_sweep/probe_singlebin_full_1p5s.wav
+```
+
+这会扫 `1..511` 共 511 个可用正频率 bin；每个 bin 持续 `64` 个 OFDM symbols，约 `1.536 s`，总时长约 `785 s`，即 `13.1 min`。
 
 ### 输出
 
@@ -226,6 +240,7 @@ python probe.py --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 
 ```bash
 python analyze.py data/rx/receive.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_ones_8_150
 python analyze.py data/step3_bandstep/receive_bandstep_1.wav --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out runs/step3_bandstep/1
+python analyze.py data/step5_singlebin_sweep/receive_probe_singlebin_full_1.wav --kind singlebin --bins 1 511 --symbols 32704 --out runs/step5_singlebin_sweep/singlebin_full/1
 ```
 
 离线自检可以把发送 probe 当作接收输入：
@@ -473,6 +488,263 @@ python rx_combo.py data/step4_fband_optimization/receive_exp2_fband_trimmed_1.wa
 批量模式额外输出：
 
 - `batch_summary.csv`：每组录音的同步分数、BER、是否完全恢复等汇总。
+
+## Step 6：重合频带、N=512、CP=256
+
+Step 6 使用独立的 `step6_modem.py`、`tx_step6.py` 和 `rx_step6.py`，不会改变旧实验的
+`N=1024, CP=128` 参数。Step 4 与 Step 5 的共同良好频率范围映射为：
+
+```text
+N=512 active bins: 158..174
+frequency:          14812.5..16312.5 Hz
+pilot bins:         158, 162, 166, 170, 174
+data bins:          159-161, 163-165, 167-169, 171-173
+```
+
+每个 payload OFDM symbol 都带 5 个 QPSK comb pilots，其余 12 个 bin 发送 BPSK 数据。
+发送结构固定为：
+
+```text
+[random probe 256 x3][file preamble 128 x3][payload x1]
+```
+
+生成 `data/step6_newexp/file.jpeg` 的测试音频：
+
+```bash
+python tx_step6.py
+```
+
+生成文件为 `data/step6_newexp/file_combo_overlap_n512_cp256.wav`，时长约 `102.048 s`。
+播放前开始录音，播完后再留 1 秒，建议录制约 `105 s`：
+
+```bash
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 5040000 \
+  data/step6_newexp/receive_file_combo_overlap_n512_cp256_1.wav
+```
+
+离线自检：
+
+```bash
+python rx_step6.py data/step6_newexp/file_combo_overlap_n512_cp256.wav \
+  --out runs/step6_newexp/overlap_n512_cp256/offline
+```
+
+分析真实录音：
+
+```bash
+python rx_step6.py data/step6_newexp/receive_file_combo_overlap_n512_cp256_1.wav \
+  --out runs/step6_newexp/overlap_n512_cp256/1
+```
+
+接收端分别保存三次 probe H、三次 file preamble H 和相位对齐后的联合平均 H。
+
+### Step 6b：回退 Step 4 trimmed 频段
+
+如果 Step 6 overlap 高频段不稳定，可以回退到 Step 4 trimmed 频段。Step 4 原始
+`N=1024` profile 是：
+
+```text
+128-160, 164-169, 172-240, 315-357
+```
+
+在 `N=512, CP=256` 下按物理频率映射为：
+
+```text
+active bins: 64-80, 82-84, 86-120, 158-178
+pilot bins:  64, 72, 80, 82, 84, 86, 96, 106, 120, 158, 166, 174, 178
+data bins:   active bins 去掉 pilot bins
+```
+
+仍然使用：
+
+```text
+[random probe 256 x3][file preamble 128 x3][payload x1]
+```
+
+生成测试音频：
+
+```bash
+python tx_step6_step4.py
+```
+
+输出文件为 `data/step6_newexp/file_combo_step4trimmed_n512_cp256.wav`，时长约
+`34.368 s`。播放前开始录音，播完后再留 1 秒，建议录制 `37 s`：
+
+```bash
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 1776000 \
+  data/step6_newexp/receive_file_combo_step4trimmed_n512_cp256_1.wav
+```
+
+离线自检：
+
+```bash
+python rx_step6_step4.py data/step6_newexp/file_combo_step4trimmed_n512_cp256.wav \
+  --out runs/step6_newexp/step4trimmed_n512_cp256/offline
+```
+
+分析真实录音：
+
+```bash
+python rx_step6_step4.py data/step6_newexp/receive_file_combo_step4trimmed_n512_cp256_1.wav \
+  --out runs/step6_newexp/step4trimmed_n512_cp256/1
+```
+
+### Step 6c：Step 4 trimmed 频段，N=1024
+
+如果需要回到 Step 4 原始 bin 编号，使用 `N=1024, CP=256` 版本。频段不再映射，
+直接使用 Step 4 trimmed：
+
+```text
+active bins: 128-160, 164-169, 172-240, 315-357
+pilot bins:  128, 136, 144, 152, 160, 164, 169, 172, 180, 188, 196, 204,
+             212, 220, 228, 236, 240, 315, 323, 331, 339, 347, 355, 357
+data bins:   127 个
+```
+
+结构仍为：
+
+```text
+[random probe 256 x3][file preamble 128 x3][payload x1]
+```
+
+生成测试音频：
+
+```bash
+python tx_step6_step4_n1024.py
+```
+
+输出文件为 `data/step6_newexp/file_combo_step4trimmed_n1024_cp256.wav`，时长约
+`43.893 s`。播放前开始录音，播完后再留 1 秒，建议录制 `47 s`：
+
+```bash
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 2256000 \
+  data/step6_newexp/receive_file_combo_step4trimmed_n1024_cp256_1.wav
+```
+
+离线自检：
+
+```bash
+python rx_step6_step4_n1024.py data/step6_newexp/file_combo_step4trimmed_n1024_cp256.wav \
+  --out runs/step6_newexp/step4trimmed_n1024_cp256/offline
+```
+
+分析真实录音：
+
+```bash
+python rx_step6_step4_n1024.py data/step6_newexp/receive_file_combo_step4trimmed_n1024_cp256_1.wav \
+  --out runs/step6_newexp/step4trimmed_n1024_cp256/1
+```
+payload 只发送一次，不做重复投票；每个 payload symbol 的 comb pilots 用于继续更新 H。
+
+## Step 7：在线时钟校正、旋转 Pilot 与软判决 FEC
+
+Step7 不再把一次扫频结果当作永久好频点。它保留较宽的候选频带，使用本次录音中的
+preamble 估计 H 和噪声，再由软判决卷积码处理环境变化造成的低可靠度频点。
+
+Step7 no longer treats one sweep as a permanent good-bin map. It keeps broader
+candidate bands, estimates H and noise from the current recording, and lets
+soft-decision FEC absorb unreliable bins caused by environmental changes.
+
+```text
+N / CP:                 512 / 256
+active bins:            64-120, 158-178
+physical ranges:        6.0-11.25 kHz, 14.8125-16.6875 kHz
+modulation:             BPSK
+pilot:                  rotating comb, spacing 4
+FEC:                    rate-1/2 K=7 convolutional, 171/133 octal
+decoder:                soft-decision Viterbi
+file block:             512 bytes + index/length + CRC32
+header:                 128 bytes, convolutionally coded, sent 3 times
+payload repeats:        1
+```
+
+发送结构 / Transmit structure：
+
+```text
+[noise-only 0.5 s]
+[sync 64]
+[full-band preamble 128 x2]
+[coded header x3]
+[interleaved coded file blocks x1, rotating pilots in every OFDM symbol]
+[tail silence 0.25 s]
+```
+
+接收端只使用 sync 的前 8 个 symbols 做短相关，然后在全部 sync+preamble 内每隔 32
+symbols 放一个 timing anchor。多个 anchor 的位置拟合出录音采样时钟比例，并先重采样到
+发送端符号网格。payload pilot 再逐 symbol 估计公共相位 CPE 和相位斜率，并输出 BPSK
+软 LLR；深衰落 bin 的 LLR 会自然变小，不再和可靠 bin 拥有相同投票权。
+
+The receiver uses only the first 8 sync symbols for robust detection. Timing
+anchors across sync+preamble estimate recorder clock error before payload
+decoding. Rotating pilots then track per-symbol CPE and phase slope and produce
+soft BPSK LLRs; faded bins receive less decoding weight.
+
+### Step7 当前限制 / Current limitation
+
+当前 timing anchors 只覆盖约 5 秒的 sync+preamble。相关峰以整数 sample 定位时，几
+samples 的多径抖动就会造成数 ppm 的斜率误差；对 60 秒以上 payload，这个误差会累计成
+几十 samples。CP 可以避免立即发生符号间干扰，但不能消除相对于训练 H 的逐 bin 相位
+旋转。
+
+The current timing anchors span only the roughly five-second training section.
+Integer-sample correlation jitter can bias the estimated clock by several ppm;
+over a minute-long payload this becomes tens of samples. CP prevents immediate
+ISI, but it does not remove the resulting per-bin phase rotation relative to the
+training H.
+
+TIFF 真实录音中，训练段估计 `+5.12 ppm`，全段已知波形诊断得到 `-3.65 ppm`，相差
+`8.77 ppm`，到结尾累计 `27.6 samples`。开启逐 symbol slope 会被多径污染；关闭 slope
+又无法补偿残余时钟漂移。完整证据和下一版方案见
+[`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
+
+生成音频 / Generate：
+
+```bash
+python tx_step7.py data/step6_newexp/file.jpeg \
+  --out data/step7_adaptive_fec/file_combo_step7_adaptive_fec.wav
+```
+
+当前 `file.jpeg` 生成约 `44.03 s` 的 WAV。payload 文件内容只发送一次。
+
+录音 / Record（建议先录 1 秒，播放 WAV，播完再等 1 秒）：
+
+```bash
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 2304000 \
+  data/step7_adaptive_fec/receive_file_combo_step7_adaptive_fec_1.wav
+```
+
+分析 / Decode：
+
+```bash
+python rx_step7.py \
+  data/step7_adaptive_fec/receive_file_combo_step7_adaptive_fec_1.wav \
+  --out runs/step7_adaptive_fec/1
+```
+
+离线闭环 / Offline loopback：
+
+```bash
+python rx_step7.py data/step7_adaptive_fec/file_combo_step7_adaptive_fec.wav \
+  --out runs/step7_adaptive_fec/offline
+```
+
+主要输出包括 `metrics.json`、`blocks.csv`、`summary.csv`、`H.npy`、`rx_llr.npy`、
+`clock_anchors.npy`、`cpe.npy`、`phase_slope.npy`、`channel_and_noise.png` 和
+`phase_tracking.png`。`coded_bit_error_rate` 是 FEC 前的硬判决误码率；
+`post_fec_bit_error_rate` 是 Viterbi 后、与已知源文件比较的误码率；每个 block 还会独立
+报告 CRC 是否通过。
+
+TIFF 测试命令：
+
+```bash
+python rx_step7.py data/step7_adaptive_fec/receive_observatory_tiff_1.wav \
+  --source data/step7_adaptive_fec/observatory_64_uncompressed.tiff \
+  --out runs/step7_adaptive_fec/observatory_tiff/1
+```
+
+若 TIFF 的 IFD 目录损坏，即使像素主体仍在，标准程序也会拒绝打开。实验分析可以把接收
+到的 `64x64 RGB` 像素主体直接导出成 best-effort PNG，但该 PNG 只是可视化，不代表
+`file_crc_ok=true`。
 
 ## 推荐实验顺序
 

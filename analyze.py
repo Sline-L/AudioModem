@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 def args():
     p = argparse.ArgumentParser(description="estimate H and plot Y/H from received probe")
     p.add_argument("receive", type=Path)
-    p.add_argument("--kind", choices=["ones", "chirp", "step", "bandstep", "random"], default="ones")
+    p.add_argument("--kind", choices=["ones", "chirp", "step", "bandstep", "singlebin", "random"], default="ones")
     p.add_argument("--bins", nargs=2, type=int, default=(8, 420), metavar=("START", "END"))
     p.add_argument("--symbols", type=int, default=256)
     p.add_argument("--seed", type=int, default=2026)
@@ -59,6 +59,8 @@ def plot(path, k, a, b, title, ylabel):
 def main():
     a = args()
     k = bins(*a.bins)
+    if a.kind == "singlebin" and a.symbols < len(k):
+        raise SystemExit("--kind singlebin requires --symbols >= number of bins")
     x = probe_symbols(a.kind, k, a.symbols, a.seed, a.bandstep_parts)
     tx_raw = ofdm_tx(x, k)
     g = wav_gain(tx_raw)
