@@ -1,12 +1,16 @@
 # Step7 Adaptive FEC and Timing Recovery / Step7 自适应 FEC 与时钟恢复
 
+> Historical baseline / 历史基线：Step7 code now lives in
+> `archive/experiments/step7/`. Step8 is the current implementation and keeps
+> the Step7 wire format while adding periodic timing anchors.
+
 ## 1. Purpose / 目标
 
-Step7 is the current robust acoustic file-transfer experiment. It was created
+Step7 was the robust acoustic file-transfer baseline. It was created
 after Step4-Step6 showed that a bin mask selected in one room can fail after the
 speaker, microphone, or recording position changes.
 
-Step7 是当前的稳健声学文件传输实验。Step4-Step6 证明：在一个位置通过扫频选择出的
+Step7 是历史稳健声学文件传输基线。Step4-Step6 证明：在一个位置通过扫频选择出的
 固定 bins，换房间、换位置或改变设备状态后可能立即失效。因此 Step7 不再追求一次扫频
 得到永久好频点，而是组合以下机制：
 
@@ -20,9 +24,9 @@ Step7 是当前的稳健声学文件传输实验。Step4-Step6 证明：在一�
 The authoritative Step7 implementation is kept separate from old experiments:
 
 ```text
-step7_modem.py   frame, OFDM, pilots, coding, interleaving, Viterbi
-tx_step7.py      Step7 WAV generator
-rx_step7.py      synchronization, timing correction, equalization, FEC, output
+archive/experiments/step7/step7_modem.py   frame, pilots, coding, Viterbi
+archive/experiments/step7/tx_step7.py      Step7 WAV generator
+archive/experiments/step7/rx_step7.py      synchronization and recovery
 ```
 
 这些脚本不会修改旧版 `audiomodem.py` 的 `N=1024, CP=128` 默认值。
@@ -423,14 +427,14 @@ exact recovered file:    written only when block and whole-file CRC pass
 Generate the TIFF WAV:
 
 ```bash
-python tx_step7.py data/step7_adaptive_fec/observatory_64_uncompressed.tiff \
+python archive/experiments/step7/tx_step7.py data/step7_adaptive_fec/observatory_64_uncompressed.tiff \
   --out data/step7_adaptive_fec/observatory_64_uncompressed_step7.wav
 ```
 
 Decode a recording:
 
 ```bash
-python rx_step7.py data/step7_adaptive_fec/receive_observatory_tiff_1.wav \
+python archive/experiments/step7/rx_step7.py data/step7_adaptive_fec/receive_observatory_tiff_1.wav \
   --source data/step7_adaptive_fec/observatory_64_uncompressed.tiff \
   --out runs/step7_adaptive_fec/observatory_tiff/1
 ```

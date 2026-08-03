@@ -9,12 +9,13 @@ the current design changed step by step.
 
 ## Current Conclusion / 当前结论
 
-The best direction so far is selective frequency use, not a full continuous
-wide band. The real acoustic channel contains narrow bad frequency points, and a
-few bad bins can dominate the final BER.
+Step8 is the current successful direction: use conservative hardware-level
+bands, estimate H in the same frame, track CPE with rotating pilots, measure PPM
+across the payload with timing anchors, and let soft FEC correct the remaining
+frequency-selective errors.
 
-目前最有希望的方向不是使用整段连续宽频带，而是选择性使用频点。真实声学信道里
-存在很窄的坏频点，少数坏 bin 就能把整体 BER 拉高。
+Step8 是当前成功路线：使用保守的硬件候选频带，在同一帧测量 H，用旋转 pilot 跟踪 CPE，
+用覆盖 payload 的 timing anchors 估计 PPM，再由软 FEC 修复剩余频率选择性错误。
 
 Key observations / 关键观察：
 
@@ -697,82 +698,95 @@ Full Step7 analysis / Step7 完整分析：
 
 ## Current Engineering State / 当前代码状态
 
-Important scripts / 重要脚本：
+Current scripts / 当前脚本：
 
 ```text
-tx_combo.py / rx_combo.py
-  General combo sender/receiver for Step2-Step4 experiments.
-  Step2-Step4 的通用合并发送/接收脚本。
-
-fband.py
-  Defines conservative and trimmed fband profiles.
-  定义 conservative 和 trimmed fband profile。
-
-probe.py / analyze.py
-  Probe generation and channel analysis. Supports bandstep and singlebin.
-  生成 probe 和分析信道，支持 bandstep 和 singlebin。
-
-tx_step6.py / rx_step6.py / step6_modem.py
-  Step6 overlap N512/CP256 profile.
-  Step6 overlap N512/CP256 profile。
-
-tx_step6_step4.py / rx_step6_step4.py / step6_step4_modem.py
-  Step6 Step4-mapped N512/CP256 profile.
-  Step6 Step4 映射到 N512/CP256 的 profile。
-
-tx_step6_step4_n1024.py / rx_step6_step4_n1024.py / step6_step4_n1024_modem.py
-  Step6 Step4-raw N1024/CP256 profile.
-  Step6 原始 Step4 N1024/CP256 profile。
-
-tx_step7.py / rx_step7.py / step7_modem.py
-  Step7 rotating-pilot, clock-corrected, soft-FEC profile.
-  Step7 旋转 pilot、采样时钟校正和软判决 FEC profile。
+step8_modem.py   self-contained PHY, framing, FEC, pilots, timing and H
+tx_step8.py      current transmit WAV generator
+rx_step8.py      current receiver, metrics and plots
 ```
 
-Important data roots / 重要数据目录：
+Historical scripts / 历史脚本：
 
 ```text
-data/step2_file/
-data/step3_bandstep/
-data/step4_fband_optimization/
-data/step5_singlebin_sweep/
-data/step6_newexp/
-data/step7_adaptive_fec/
+archive/experiments/steps1_to_5/
+archive/experiments/step6/
+archive/experiments/step7/
 ```
 
-Important output roots / 重要输出目录：
+The original `data/step1...step7` recordings remain in place. Generated
+pre-Step8 results moved to the Git-ignored `archive/runs/`.
+
+原始 `data/step1...step7` 录音保持原位；Step8 前的分析结果已移至 Git 忽略的
+`archive/runs/`。
+
+Current roots / 当前目录：
 
 ```text
-runs/step2_file/
-runs/step3_bandstep/
-runs/step4_fband_optimization/
-runs/step5_singlebin_sweep/
-runs/step6_newexp/
-runs/step7_adaptive_fec/
+data/step8_clock_anchor/
+runs/step8_clock_anchor/
 ```
 
 ## Recommended Next Experiments / 建议下一步
 
-1. Add known timing anchors across the payload, for example 8 symbols every 256
-   payload symbols. These are training overhead, not payload repeats.
-2. 在 payload 中周期插入已知 timing anchors，例如每 256 个 payload symbols 插入 8 个
-   timing symbols；它们不是 payload 重复。
-3. Fit sample scale robustly over the whole recording and reject anchor outliers.
-4. 用覆盖整段录音的 anchors 稳健估计 sample scale，并拒绝异常相关峰。
-5. Disable direct instantaneous slope application. Use per-symbol common phase
-   and only a slowly filtered pilot slope as residual timing evidence.
-6. 不直接应用逐 symbol slope；每 symbol 跟踪公共相位，pilot slope 只做慢速残差观测。
-7. Keep the current soft convolutional FEC and block CRC. They recovered all
-   corrected-clock TIFF errors.
-8. 保留当前 soft convolutional FEC 和 block CRC；时钟正确后它们已能恢复全部 TIFF 数据。
-9. Keep bins only when they fail across devices and positions; do not prune more
-   bins before timing recovery is fixed.
-10. 修好 timing 前不继续按单次房间结果删 bins。
+1. Test Step8 FEC margin under controlled distance, noise and clipping changes.
+2. 在可控距离、噪声和削波条件下测量 Step8 的 FEC 余量。
+3. Make anchor peak selection more consistent under multipath and bound payload
+   processing after the header reveals its exact length.
+4. 提高多径下 anchor 峰路径一致性，并在 header 解出长度后限制 payload 处理范围。
+5. Build the Phase-1 experiment TUI only after exposing structured generate and
+   decode APIs shared with the CLI.
+6. 先提取 CLI/TUI 共用的结构化生成和解码 API，再实现第一阶段实验 TUI。
 
-Near-term target / 近期目标：
+## Step8: Periodic Clock Anchors / 周期时钟锚点
+
+Step8 implements the previous recommendation as a separate, backward-safe
+pipeline. Step7 files and decoders remain unchanged.
+
+Step8 将上述建议实现为独立的新流程，Step7 文件和接收器保持不变。
 
 ```text
-Recover a 60-90 second single-payload recording without source-aided timing and
-keep all block and whole-file CRC checks true.
-不使用源文件辅助 timing，在 60-90 秒单次 payload 录音中保持全部 block 和整文件 CRC 通过。
+[sync 64][preamble 128x2]
+[logical payload x128][timing anchor x8]...
+[remaining single payload]
 ```
+
+- Each anchor has a unique deterministic QPSK sequence over bins 64-120 and
+  158-178.
+- 每组 anchor 在 bins 64-120、158-178 上使用唯一的确定性 QPSK 序列。
+- Fractional normalized correlation and a robust whole-recording line fit
+  estimate sample-clock ppm.
+- 亚采样归一化互相关和全段稳健直线拟合用于估计采样时钟 ppm。
+- Anchors also refresh full-band H with alpha `0.5`; per-symbol CPE remains on.
+- Anchor 同时以 `0.5` 融合系数刷新全频 H；逐 symbol CPE 保留。
+- Instantaneous slope is off by default. A 64-symbol slow mode is explicit only.
+- 即时 slope 默认关闭，64-symbol slow 模式只能显式开启。
+
+Verified before real recording / 真实录音前验证：
+
+```text
+offline:                  ppm +0.0000, BER 0, 26/26, exact TIFF
+synthetic +20 ppm:        measured +20.0034, BER 0, 26/26
+synthetic -20 ppm:        measured -20.0034, BER 0, 26/26
+payload anchors removed:  training_fallback reported explicitly
+Step7 regression:         BER 0, 26/26, exact TIFF
+```
+
+The generated Step8 TIFF WAV is 70.526 seconds and contains one copy of the
+payload. Two real recordings now pass all CRC checks and match the source:
+
+生成的 Step8 TIFF WAV 长 70.526 秒，只包含一份 payload。两次真实录音均通过全部 CRC 并
+与源文件完全一致：
+
+```text
+recording 1: sync 0.338330, ppm -20.1574, raw BER 6.106942%, post-FEC 0%, 26/26
+recording 2: sync 0.270234, ppm -10.8823, raw BER 5.558049%, post-FEC 0%, 26/26
+```
+
+Recording 2 contained severe startup clipping and intentional noise near the
+end. Periodic anchors recovered the full clock fit and FEC corrected all blocks.
+
+录音 2 包含严重启动削波和末尾主动噪声；周期 anchors 仍恢复了全段时钟拟合，FEC 修复了
+全部 blocks。
+
+Full details / 完整说明：[`step8_clock_anchor.md`](step8_clock_anchor.md).

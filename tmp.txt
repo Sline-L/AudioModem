@@ -1,5 +1,0 @@
-
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 5000000 data/step3_bandstep/receive_bandstep_1.wav
-
-python tx.py data/step2_file/exp2.txt --bins 8 150 --out data/step2_file/exp2_8_150.wav
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 500000 data/step2_file/receive_exp2_combo_8_150_1.wav

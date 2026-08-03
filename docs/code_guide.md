@@ -1,829 +1,197 @@
-# 代码功能与用法详解
+# Step8 Code Guide / Step8 代码指南
 
-这份文档说明当前新结构下每个脚本的作用。旧版通用流程默认采样率 `48000 Hz`、FFT 点数 `1024`、循环前缀 `128`；Step6 和 Step7 使用独立参数，不会覆盖旧实验。
+This guide covers the current runnable pipeline. Step1-Step7 commands are kept
+with their code under `archive/experiments/`.
 
-实验路线、关键结果和每次方案调整的原因记录在 [`experiment_history.md`](experiment_history.md)。
-Step7 的完整帧格式、算法和当前时钟问题见
-[`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
+本文只说明当前可运行的 Step8 主线。Step1-Step7 的命令随代码保存在
+`archive/experiments/`。
 
-## 1. `audiomodem.py`
+## 1. Modules / 模块
 
-这是唯一的核心库，其他脚本都从这里导入函数。它不直接运行实验，只提供基础能力。
+### `step8_modem.py`
 
-### 关键常量
+Self-contained protocol implementation / 自包含协议实现：
 
-- `FS = 48000`：WAV 采样率。
-- `N = 1024`：OFDM FFT 点数。
-- `CP = 128`：循环前缀长度。
-- `L = N + CP = 1152`：一个 OFDM 符号的总采样点数。
-- `I16 = 32768.0`：16-bit PCM 归一化尺度。
+- mono 16-bit 48 kHz WAV I/O;
+- N=512, CP=256 OFDM modulation and demodulation;
+- file header, 512-byte blocks and CRC32;
+- rate-1/2 K=7 convolutional encoding and soft Viterbi decoding;
+- deterministic interleaving, BPSK data and rotating comb pilots;
+- sync/preamble generation and H/noise estimation;
+- payload timing-anchor framing and robust whole-recording PPM fitting;
+- periodic H refresh, per-symbol CPE and optional slow phase slope.
 
-### 主要函数
+它不再导入 Step7 或旧版 `audiomodem.py`。
 
-- `bins(a=8, b=420)`  
-  生成可用子载波编号，例如 `bins(8, 150)` 得到 `8..150`。范围必须满足 `1 <= a <= b <= 511`，因为实数 OFDM 只使用正频率一半。
+### `tx_step8.py`
 
-- `read_wav(p)`  
-  读取单声道、16-bit、48 kHz WAV，并归一化到浮点数组，大约在 `[-1, 1]`。
+Reads one file and writes a transmit WAV plus deterministic sidecars. The
+payload is sent once; anchors are known training symbols, not repeated file
+data.
 
-- `write_wav(p, x)`  
-  把浮点音频写成单声道 16-bit 48 kHz WAV。写入前会自动缩放到峰值约 `0.95`，避免削波。
+读取一个源文件并生成发送 WAV 与确定性 sidecars。Payload 只发送一次；anchor 是已知训练
+符号，不是文件重复。
 
-- `wav_gain(x)`  
-  返回 `write_wav()` 使用的缩放系数。`analyze.py` 用它保证理论 probe 和实际写出的 WAV 尺度一致。
+### `rx_step8.py`
 
-- `qpsk(data)`  
-  把 bytes 转成 QPSK 星座点。QPSK 有 4 个星座点，所以每个复数符号承载 2 bit，不是 4 bit 或 16 bit。
+Accepts one or more WAV recordings, estimates sync/H/clock, produces soft LLRs,
+decodes FEC and CRC blocks, and writes metrics, arrays, plots and the recovered
+file.
 
-- `bytes_from_qpsk(z)`  
-  把均衡后的 QPSK 星座点按象限判决，恢复成 bytes。
+可一次分析一份或多份录音，完成同步、H、时钟、软判决、FEC、CRC 和文件恢复。
 
-- `mod_symbols(data, mod="qpsk")` / `bytes_from_mod(z, mod="qpsk")`  
-  通用调制和判决函数，支持：
-  - `bpsk`：2 个星座点，1 bit/符号，最稳但速率最低。
-  - `qpsk`：4 个星座点，2 bit/符号，当前默认。
-  - `qam16`：16 个星座点，4 bit/符号，速率更高但对噪声和 H 估计更敏感。
+## 2. Generate / 生成发送音频
 
-- `pack(path)` / `unpack(data)`  
-  文件打包格式是：
+Default TIFF / 默认 TIFF：
 
-  ```text
-  filename\0size\0payload
-  ```
+```bash
+python tx_step8.py
+```
 
-  `rx.py` 恢复时依靠这个头部知道输出文件名和 payload 长度。
+Any file / 任意文件：
 
-- `ofdm_tx(s, k)`  
-  把频域符号 `s` 放进子载波 `k`，构造共轭对称频谱，IFFT 得到实数音频，再加入 CP。
+```bash
+python tx_step8.py data/source/example.bin \
+  --out data/step8_clock_anchor/example_step8.wav
+```
 
-- `ofdm_rx(x, k)`  
-  把接收音频按 `1152` 点切成 OFDM 符号，去掉 `128` 点 CP，FFT 后取出子载波 `k`。
+Important transmitter options / 主要发送参数：
 
-- `preamble_symbols(k, n=32, seed=2026)` / `preamble_wave(k, n=32, seed=2026)`  
-  生成文件传输用的物理层同步头。同步头是固定随机 QPSK OFDM 符号，默认 32 个 OFDM 符号，时长约 `0.768 s`。它不是 `filename\0size\0payload` 文件头。
+| Option | Default | Meaning / 含义 |
+|---|---:|---|
+| `input` | Step8 TIFF | source file / 源文件 |
+| `--noise-seconds` | `0.5` | leading silence used for noise measurement |
+| `--sync-symbols` | `64` | initial random-QPSK sync symbols |
+| `--preamble-symbols` | `128` | symbols per H-training preamble |
+| `--preamble-repeats` | `2` | independent preamble blocks |
+| `--block-size` | `512` | CRC-protected file bytes per block |
+| `--header-repeats` | `3` | independently interleaved header copies |
+| `--timing-anchor-interval` | `128` | logical payload symbols between anchors |
+| `--timing-anchor-symbols` | `8` | QPSK symbols in each anchor |
+| `--tail-seconds` | `0.25` | trailing silence |
+| `--out` | Step8 WAV | transmit WAV path |
 
-- `find_sync(rx, preamble)`  
-  用互相关在录音中寻找同步头位置，返回 `sync_start` 和 `sync_score`。`rx.py` 用它自动跳过录音前面的静音和设备延迟。
-
-- `file_symbols(path, k)`  
-  文件发送专用：读文件、打包头部、按 `--mod` 映射，并补零成完整 OFDM 符号矩阵。
-
-- `probe_symbols(kind, k, n, seed=2026)`  
-  生成训练频域符号，支持：
-  - `ones`：所有目标频点始终为 `1+0j`，整段时间同时激励全部 bins。
-  - `chirp`：所有目标频点幅度为 1，相位随时间和频点平滑变化，像连续线性扫频。
-  - `step`：所有目标频点幅度为 1，但相位按时间分成 16 档跳变，像阶梯状全频扫频。
-  - `bandstep`：每个时间段只激励一段连续 bins，下一时间段跳到下一段；这是部分区间、阶梯状扫频。
-  - `singlebin`：每个时间段只激励一个 bin，按 bins 顺序逐点扫频；适合找很窄的坏频点。
-  - `random`：随机 QPSK，主要用于调试和对比。
-
-## 2. `tx.py`
-
-`tx.py` 负责把一个源文件调制成可播放的发送 WAV。
-
-### 数据流
+Generated sidecars / 生成的 sidecars：
 
 ```text
-[随机QPSK同步头] + [文件 -> filename\0size\0payload -> BPSK/QPSK/16-QAM -> OFDM] -> WAV
+*.meta.json          full profile, frame sizes, seeds and duration
+*.sync.npy           known sync symbols
+*.preamble.npy       known H-training symbols
+*.anchor_starts.npy  physical payload-symbol offsets
+*.anchors.npy        all known payload anchor symbols
 ```
 
-如果传入 `--h H.npy`，发送端会先把频域符号乘以 `H`。一般真实硬件测试不需要这么做；默认就是理想发送信道。
+## 3. Record / 录音
 
-默认会在 payload 前加入同步头。同步头用于真实录音起点同步，和文件头是两回事：
+The default TIFF WAV is `70.526 s`. A 74-second recording leaves margins before
+and after playback:
+
+默认 TIFF WAV 长 `70.526 s`，建议录制 74 秒：
+
+```bash
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 3552000 \
+  data/step8_clock_anchor/receive_observatory_step8_3.wav
+```
+
+Start recording, wait about one second, play the Step8 WAV once, wait another
+second, and stop. Avoid touching volume controls while it plays.
+
+开始录音后等待约一秒，只播放一次 Step8 WAV，播完再等待约一秒。播放期间不要调整音量。
+
+## 4. Decode / 解码
+
+Offline / 离线：
+
+```bash
+python rx_step8.py data/step8_clock_anchor/observatory_64_uncompressed_step8.wav \
+  --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --phase-slope off \
+  --out runs/step8_clock_anchor/offline
+```
+
+Real recording / 真实录音：
+
+```bash
+python rx_step8.py data/step8_clock_anchor/receive_observatory_step8_3.wav \
+  --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --phase-slope off \
+  --out runs/step8_clock_anchor/3
+```
+
+Batch / 批量：
+
+```bash
+python rx_step8.py \
+  data/step8_clock_anchor/receive_observatory_step8_1.wav \
+  data/step8_clock_anchor/receive_observatory_step8_2.wav \
+  --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --out runs/step8_clock_anchor/batch
+```
+
+Important receiver options / 主要接收参数：
+
+| Option | Default | Meaning / 含义 |
+|---|---:|---|
+| `--source` | Step8 TIFF | optional truth, used only for BER/file comparison |
+| `--channel-alpha` | `0.35` | comb-pilot H update strength |
+| `--anchor-h-alpha` | `0.5` | full-band anchor H fusion; `0` disables it |
+| `--anchor-min-score` | `0.12` | minimum normalized anchor correlation |
+| `--clock-search` | `128` | local anchor search radius in samples |
+| `--payload-search` | `16` | payload-start fine search radius |
+| `--phase-slope` | `off` | `off` or controlled experiment `slow` |
+| `--slope-window` | `64` | robust history length in slow mode |
+| `--slope-clip` | `0.05` | maximum applied rad/bin slope |
+| `--out` | Step8 runs | output directory |
+
+`--source` never selects synchronization, PPM, H or slope candidates. It is
+only used after decoding to report BER and exact file match.
+
+`--source` 不参与同步、PPM、H 或 slope 候选选择，只用于事后 BER 和文件一致性比较。
+
+## 5. Outputs / 输出
+
+| File | Content / 内容 |
+|---|---|
+| `metrics.json` | authoritative sync, PPM, BER, CRC and mode status |
+| `blocks.csv` | CRC result and error text for each file block |
+| `summary.csv` | per-bin H, noise and LLR reliability |
+| recovered file | exact filename only when whole-file CRC passes |
+| `*.partial` | best-effort bytes when the complete file CRC fails |
+| `decoded_header.bin` | raw decoded 128-byte header |
+| `clock_anchors.npy` | nominal/observed positions, score, residual and acceptance |
+| `clock_fit.png` | whole-recording timing fit and residuals |
+| `H.npy` | initial sync+preamble channel estimate |
+| `H_training_blocks.npy` | phase-aligned training H estimates |
+| `H_anchor_track.npy` | periodic full-active-band anchor H estimates |
+| `pilot_H_track.npy` | per-logical-symbol tracked channel |
+| `rx_llr.npy` | soft coded-bit decisions |
+| `cpe.npy` | per-symbol common phase correction |
+| `phase_slope*.npy` | measured and applied optional slope |
+| `channel_and_noise.png` | initial H and noise powers |
+| `phase_tracking.png` | CPE, slope and pilot residual over time |
+
+Accuracy should be judged in this order / 准确性判断顺序：
 
 ```text
-[physical preamble][payload bytes header + payload data]
+header_ok -> blocks_ok/blocks_total -> file_crc_ok -> file_match
 ```
 
-### 用法
+Raw coded BER describes channel difficulty. Post-FEC BER and CRC determine
+whether the recovered file is valid.
 
-```bash
-python tx.py data/source/file16_test.txt --bins 8 150 --out data/tx/file16_8_150.wav
-```
+FEC 前 BER 描述信道难度；FEC 后 BER 和 CRC 才决定恢复文件是否有效。
 
-切换调制方式：
-
-```bash
-python tx.py data/source/file16_test.txt --mod bpsk --bins 8 150 --out data/tx/file16_bpsk.wav
-python tx.py data/source/file16_test.txt --mod qpsk --bins 8 150 --out data/tx/file16_qpsk.wav
-python tx.py data/source/file16_test.txt --mod qam16 --bins 8 150 --out data/tx/file16_qam16.wav
-```
-
-### 参数
-
-- `input`：要发送的源文件。默认是 `data/source/file16_test.txt`。
-- `--bins START END`：使用的子载波范围。推荐测试 `8 420`、`8 200`、`8 150`。
-- `--mod bpsk|qpsk|qam16`：文件调制方式，默认 `qpsk`。
-- `--sync-symbols N`：同步头 OFDM 符号数，默认 `32`。
-- `--sync-seed N`：同步头随机种子，默认 `2026`。
-- `--no-sync`：关闭同步头，输出旧式纯 payload WAV。
-- `--h path/to/H.npy`：可选，发送端预乘一个频域信道。
-- `--out path.wav`：输出 WAV 路径。
-
-### 输出
-
-- 一个可播放的 WAV，例如 `data/tx/file16_8_150.wav`。
-- 命令行会打印 OFDM 符号数和使用的 bins。
-
-## 3. `rx.py`
-
-`rx.py` 负责从接收 WAV 中恢复文件。
-
-### 数据流
+## 6. Archive / 历史代码
 
 ```text
-WAV -> 互相关找同步头 -> 去 CP -> FFT -> 除以 H -> BPSK/QPSK/16-QAM 判决 -> bytes -> 文件
+archive/experiments/steps1_to_5/
+archive/experiments/step6/
+archive/experiments/step7/
+archive/runs/
 ```
 
-如果没有传 `--h`，默认使用理想信道 `H=1`，适合离线闭环测试。真实录音要传 `analyze.py` 得到的 `H.npy`。
-
-### 用法
-
-离线测试：
-
-```bash
-python rx.py data/tx/file16_8_150.wav --bins 8 150 --out runs/recovered
-```
-
-如果发送端用了 `--mod qam16`，接收端必须同样传 `--mod qam16`：
-
-```bash
-python rx.py data/tx/file16_qam16.wav --mod qam16 --bins 8 150 --out runs/recovered_qam16
-```
-
-真实信道测试：
-
-```bash
-python rx.py data/rx/receive.wav --bins 8 150 --h runs/probe_ones_8_150/H.npy --out runs/recovered_real
-```
-
-### 参数
-
-- `input`：接收 WAV。默认是 `data/tx/file.wav`。
-- `--bins START END`：必须和发送、估计 H 时一致。
-- `--mod bpsk|qpsk|qam16`：必须和 `tx.py` 一致。
-- `--sync-symbols N`：必须和发送端一致。
-- `--sync-seed N`：必须和发送端一致。
-- `--no-sync`：接收旧式纯 payload WAV，不做互相关同步。
-- `--h path/to/H.npy`：频域信道响应，长度必须等于 bins 数量。
-- `--out dir`：恢复文件输出目录。
-
-### 输出
-
-- 恢复出的原文件。
-- `rx_symbols.npy`：均衡后的 QPSK 星座点，后续可以用它计算 BER 或画星座图。
-- 命令行会打印 `sync_start`、`sync_score`、`payload_start`。
-
-### 注意
-
-默认同步只处理起点偏移，不处理采样率漂移。真实录音如果 `sync_score` 很低，优先检查播放音量、录音音量、bins 和 `--sync-seed` 是否一致。
-
-## 4. `probe.py`
-
-`probe.py` 负责生成信道估计训练 WAV。
-
-### 数据流
-
-```text
-训练频域符号 X -> OFDM -> probe.wav
-```
-
-同时保存一份 `.symbols.npy`，记录理论频域训练符号。
-
-### 用法
-
-```bash
-python probe.py --kind ones --bins 8 150 --symbols 256 --out data/tx/probe_ones_8_150.wav
-python probe.py --kind chirp --bins 8 200 --symbols 256 --out data/tx/probe_chirp_8_200.wav
-python probe.py --kind step --bins 8 420 --symbols 256 --out data/tx/probe_step_8_420.wav
-python probe.py --kind bandstep --bins 8 150 --symbols 256 --out data/tx/probe_bandstep_8_150.wav
-python probe.py --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out data/tx/probe_bandstep_full_64parts_long.wav
-python probe.py --kind singlebin --bins 1 511 --symbols 32704 --out data/step5_singlebin_sweep/probe_singlebin_full_1p5s.wav
-```
-
-### 参数
-
-- `--kind ones|chirp|step|bandstep|singlebin|random`：训练信号类型。
-- `--bins START END`：训练覆盖的子载波范围。
-- `--symbols N`：训练 OFDM 符号数。默认 `256`，时长约 `256 * 1152 / 48000 = 6.144 s`。
-- `--seed N`：`random` 训练使用的随机种子。
-- `--bandstep-parts N`：`bandstep` 划分的连续频带数，默认 `16`；发送和分析时必须一致。
-- `--out path.wav`：输出 probe WAV。
-
-逐点全频扫频推荐：
-
-```bash
-python probe.py --kind singlebin --bins 1 511 --symbols 32704 --out data/step5_singlebin_sweep/probe_singlebin_full_1p5s.wav
-```
-
-这会扫 `1..511` 共 511 个可用正频率 bin；每个 bin 持续 `64` 个 OFDM symbols，约 `1.536 s`，总时长约 `785 s`，即 `13.1 min`。
-
-### 输出
-
-- `probe.wav`：播放用训练音频。
-- `probe.symbols.npy`：理论频域训练符号矩阵，形状是 `(symbols, bins_count)`。
-
-## 5. `analyze.py`
-
-`analyze.py` 负责从录到的 probe 中同步训练段，计算真实信道响应 `H = Y / X`，并输出图和数据。
-
-### 数据流
-
-```text
-重新生成理论 probe -> 与录音互相关同步 -> 得到接收频域 Y -> H = Y / X -> 保存数据和图
-```
-
-### 用法
-
-录到 `data/rx/receive.wav` 后：
-
-```bash
-python analyze.py data/rx/receive.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_ones_8_150
-python analyze.py data/step3_bandstep/receive_bandstep_1.wav --kind bandstep --bins 1 511 --symbols 4096 --bandstep-parts 64 --out runs/step3_bandstep/1
-python analyze.py data/step5_singlebin_sweep/receive_probe_singlebin_full_1.wav --kind singlebin --bins 1 511 --symbols 32704 --out runs/step5_singlebin_sweep/singlebin_full/1
-```
-
-离线自检可以把发送 probe 当作接收输入：
-
-```bash
-python analyze.py data/tx/probe_ones_8_150.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_loopback
-```
-
-理想情况下会看到：
-
-```text
-sync_start=0
-sync_score=1.000000
-mean_abs_h≈1
-```
-
-### 参数
-
-- `receive`：录音 WAV。
-- `--kind`：必须和 `probe.py` 生成时一致。
-- `--bins START END`：必须和 `probe.py` 一致。
-- `--symbols N`：必须和 `probe.py` 一致。
-- `--seed N`：如果是 `random` probe，必须和 `probe.py` 一致。
-- `--bandstep-parts N`：如果是 `bandstep` probe，必须和 `probe.py` 一致。
-- `--out dir`：输出目录。
-
-### 输出
-
-输出目录中会有：
-
-- `Y.npy`：接收频域符号，形状是 `(symbols, bins_count)`。
-- `Y_theory.npy`：理论发送频域符号 `X`，形状同上。
-- `H.npy`：估计出的频域信道响应，长度是 `bins_count`。
-- `summary.csv`：每个 bin 的频率、`|Y|`、理论 `|Y|`、`H` 实部/虚部/幅度/相位。
-- `Y_spectrum.png`：接收 `Y` 与理论 `Y` 的频谱幅度对比。
-- `H.png`：估计信道幅度图。
-
-命令行指标：
-
-- `sync_start`：在录音中找到的 probe 起点采样点。
-- `sync_score`：同步相关分数，越接近 1 越好。真实录音明显低于 1 是正常的，但太低说明录音弱、噪声大或参数不匹配。
-- `mean_abs_h`：平均信道幅度。它会包含扬声器音量、麦克风增益和空气信道。
-
-## 6. `tx_combo.py`
-
-`tx_combo.py` 负责生成“一次播放”的合并 WAV，把信道训练 probe 和文件发送放在同一个音频里。
-
-### 数据流
-
-```text
-[probe训练段][文件同步头][文件payload] -> WAV
-```
-
-默认用于 `exp2.txt` 的 `8..150` 子载波实验：
-
-```bash
-python tx_combo.py
-```
-
-这会生成：
-
-- `data/step2_file/exp2_combo_8_150.wav`：你需要播放的唯一音频。
-- `data/step2_file/exp2_combo_8_150.probe.npy`：写出 WAV 后带缩放系数的理论 probe 符号。
-- `data/step2_file/exp2_combo_8_150.meta.json`：记录 probe、同步头、payload 的长度和起点。
-
-默认结构是：
-
-```text
-256 个 probe OFDM symbols
-32 个 file preamble OFDM symbols
-124 个 exp2.txt payload OFDM symbols
-```
-
-当前 `exp2.txt` 的 `8_150` 合并音频时长约 `9.888 s`。
-
-### 参数
-
-- `input`：要发送的源文件，默认 `data/step2_file/exp2.txt`。
-- `--bins START END`：默认 `8 150`。
-- `--fband-profile conservative|trimmed`：使用 bandstep 和真实 payload 实测后挑出的非连续频段。`conservative` 为第一版 `128-160,164-240,315-400`；`trimmed` 会删掉真实 payload 中错误集中的 `170-171` 和 `358-400`，保留 `128-160,164-169,172-240,315-357`。每个 profile 都使用每个 OFDM symbol 内的 comb pilot，没有列入 active 的 bins 全部置零。
-- `--mod bpsk|qpsk|qam16`：默认 `qpsk`。
-- `--probe-kind ones|chirp|step|bandstep|random`：默认 `ones`。
-- `--probe-symbols N`：默认 `256`。
-- `--probe-seed N`：默认 `2026`。
-- `--sync-symbols N`：文件同步头长度，默认 `32`。
-- `--sync-seed N`：文件同步头随机种子，默认 `2026`。
-- `--pilot-interval N`：每隔多少个 data OFDM symbols 插入 1 个整符号 pilot。默认 `0`，表示不插 pilot。
-- `--pilot-len N`：每次插入连续多少个 pilot OFDM symbols，默认 `1`。多个 pilot 会在接收端平均估计 H。
-- `--pilot-kind ones|chirp|step|bandstep|random`：pilot 类型，默认 `random`。
-- `--pilot-seed N`：pilot 随机种子，默认 `2027`。
-- `--payload-repeats N`：同一个 framed payload 在一段音频中重复几遍，默认 `1`。接收端会对多遍 bit 做多数投票。
-- `--out path.wav`：输出 WAV 路径。
-
-### BPSK + pilot 推荐实验
-
-当前真实声学链路优先测试更稳的 BPSK、128 个 file preamble symbols、每 4 个 data symbols 插入 1 个 pilot：
-
-```bash
-python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav
-```
-
-当前 `exp2.txt` 会生成：
-
-```text
-256 个 probe OFDM symbols
-128 个 file preamble OFDM symbols
-248 个 BPSK data OFDM symbols
-62 个 pilot OFDM symbols
-```
-
-音频时长约 `16.656 s`。真实录音建议录 `19 s` 或更长，给播放前后各留约 1 秒余量。
-
-更稳的单段音频实验使用 BPSK、128 个 file preamble symbols、每 4 个 data symbols 插入 2 个 pilot，并把 payload 重复 3 遍：
-
-```bash
-python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav
-```
-
-当前 `exp2.txt` 会生成：
-
-```text
-256 个 probe OFDM symbols
-128 个 file preamble OFDM symbols
-248 个 BPSK data OFDM symbols
-124 个 pilot OFDM symbols
-单次 framed payload 372 个 OFDM symbols
-payload 重复 3 遍
-```
-
-音频时长约 `36.000 s`。真实录音建议录 `39-40 s`。
-
-### Step 4: fband + comb pilot 实验
-
-bandstep 和第一轮真实 payload 实测后，优先测试删掉坏频点的非连续频段和每符号 comb pilot：
-
-```bash
-python tx_combo.py data/step4_fband_optimization/exp2.txt --fband-profile trimmed --mod bpsk --sync-symbols 128 --payload-repeats 3 --out data/step4_fband_optimization/exp2_combo_fband_trimmed_bpsk_repeat3.wav
-```
-
-当前 `exp2.txt` 会生成：
-
-```text
-active bins: 128-160, 164-169, 172-240, 315-357
-data bins: 127 个
-comb pilot bins: 24 个，每个 payload OFDM symbol 都发送
-256 个 probe OFDM symbols
-128 个 file preamble OFDM symbols
-279 个 payload OFDM symbols x 3 repeats
-```
-
-音频时长约 `29.304 s`。真实录音建议录 `32-33 s`，保存到：
-
-```text
-data/step4_fband_optimization/receive_exp2_fband_trimmed_1.wav
-```
-
-## 7. `rx_combo.py`
-
-`rx_combo.py` 负责从一次播放的录音中先估计当前 `H`，再恢复后面的文件。
-
-### 数据流
-
-```text
-录音 WAV -> probe 同步 -> H = Y_probe / X_probe
-         -> 文件同步头二次同步/估 H -> payload FFT -> pilot 跟踪 H -> 判决 -> unpack -> 文件
-```
-
-离线自检：
-
-```bash
-python rx_combo.py data/step2_file/exp2_combo_8_150.wav --out runs/step2_file/combo_8_150/offline
-```
-
-真实实验时，你只需要播放：
-
-```text
-data/step2_file/exp2_combo_8_150.wav
-```
-
-然后把录音保存成：
-
-```text
-data/step2_file/receive_exp2_combo_8_150_1.wav
-```
-
-再运行：
-
-```bash
-python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav --out runs/step2_file/combo_8_150/1
-```
-
-批量分析 5 组录音：
-
-```bash
-python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav data/step2_file/receive_exp2_combo_8_150_2.wav data/step2_file/receive_exp2_combo_8_150_3.wav data/step2_file/receive_exp2_combo_8_150_4.wav data/step2_file/receive_exp2_combo_8_150_5.wav --out runs/step2_file/combo_8_150
-```
-
-BPSK + pilot 接收：
-
-```bash
-python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/1
-```
-
-BPSK + pilot 平均 + payload 重复投票接收：
-
-```bash
-python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/1
-```
-
-Step 4 fband + comb pilot 接收：
-
-```bash
-python rx_combo.py data/step4_fband_optimization/receive_exp2_fband_trimmed_1.wav --source data/step4_fband_optimization/exp2.txt --fband-profile trimmed --mod bpsk --sync-symbols 128 --payload-repeats 3 --repeat-combine hard --pilot-smooth 12 --out runs/step4_fband_optimization/fband_trimmed_bpsk_repeat3/1
-```
-
-接收端默认会在 probe 后面 `±8192` samples 范围内重新寻找 file preamble。这个范围用于处理 `ones` probe 带来的整 OFDM symbol 起点歧义。
-
-调试真实录音时可以加：
-
-```bash
---file-sync-mode best --pilot-smooth 8 --repeat-combine soft
-```
-
-- `--file-sync-mode best`：同时做 probe 附近搜索和全局 file preamble 搜索，自动选同步分数更高的峰；当 `ones` probe 把起点带偏时，这个选项能救回 file sync。
-- `--pilot-smooth N`：对连续 pilot 估计出的 `H` 做时间平滑，真实录音中 `N=8` 当前表现比逐个 pilot 直接使用更稳。
-- `--repeat-combine soft`：BPSK + payload repeats 时用均衡后实部软合并，而不是每遍硬判决后多数投票。
-
-### 输出
-
-每组输出目录中会有：
-
-- `H.npy` / `H_sync.npy`：file preamble 估计出的复数信道响应。
-- `H_probe.npy`：最前面 probe 估计出的复数信道响应。
-- `pilot_H.npy`：启用 pilot 时，每个 pilot 更新后的 H。
-- `Y_probe.npy` / `Y_probe_theory.npy`：接收和理论 probe 频域符号。
-- `Y_sync.npy` / `Y_sync_theory.npy`：接收和理论 file preamble 频域符号。
-- `rx_symbols.npy`：均衡后的 payload 星座点。
-- `rx_symbols_repeatN.npy`：启用 `--payload-repeats` 时，每一遍 payload 独立均衡后的星座点。
-- `decoded_raw.bin`：判决出的原始 byte 流，即使解包失败也会保存。
-- `decoded_raw_repeatN.bin`：启用 `--payload-repeats` 时，每一遍 payload 独立判决出的 byte 流。
-- `summary.csv`：每个 bin 的 `H` 幅度和相位。
-- `metrics.json`：同步分数、payload 起点、pilot residual、每遍 repeat BER、投票后 BER、`mean_abs_h`、是否成功识别文件头、是否和源文件完全一致等指标。
-- 恢复出的文件，例如 `exp2.txt`。
-
-批量模式额外输出：
-
-- `batch_summary.csv`：每组录音的同步分数、BER、是否完全恢复等汇总。
-
-## Step 6：重合频带、N=512、CP=256
-
-Step 6 使用独立的 `step6_modem.py`、`tx_step6.py` 和 `rx_step6.py`，不会改变旧实验的
-`N=1024, CP=128` 参数。Step 4 与 Step 5 的共同良好频率范围映射为：
-
-```text
-N=512 active bins: 158..174
-frequency:          14812.5..16312.5 Hz
-pilot bins:         158, 162, 166, 170, 174
-data bins:          159-161, 163-165, 167-169, 171-173
-```
-
-每个 payload OFDM symbol 都带 5 个 QPSK comb pilots，其余 12 个 bin 发送 BPSK 数据。
-发送结构固定为：
-
-```text
-[random probe 256 x3][file preamble 128 x3][payload x1]
-```
-
-生成 `data/step6_newexp/file.jpeg` 的测试音频：
-
-```bash
-python tx_step6.py
-```
-
-生成文件为 `data/step6_newexp/file_combo_overlap_n512_cp256.wav`，时长约 `102.048 s`。
-播放前开始录音，播完后再留 1 秒，建议录制约 `105 s`：
-
-```bash
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 5040000 \
-  data/step6_newexp/receive_file_combo_overlap_n512_cp256_1.wav
-```
-
-离线自检：
-
-```bash
-python rx_step6.py data/step6_newexp/file_combo_overlap_n512_cp256.wav \
-  --out runs/step6_newexp/overlap_n512_cp256/offline
-```
-
-分析真实录音：
-
-```bash
-python rx_step6.py data/step6_newexp/receive_file_combo_overlap_n512_cp256_1.wav \
-  --out runs/step6_newexp/overlap_n512_cp256/1
-```
-
-接收端分别保存三次 probe H、三次 file preamble H 和相位对齐后的联合平均 H。
-
-### Step 6b：回退 Step 4 trimmed 频段
-
-如果 Step 6 overlap 高频段不稳定，可以回退到 Step 4 trimmed 频段。Step 4 原始
-`N=1024` profile 是：
-
-```text
-128-160, 164-169, 172-240, 315-357
-```
-
-在 `N=512, CP=256` 下按物理频率映射为：
-
-```text
-active bins: 64-80, 82-84, 86-120, 158-178
-pilot bins:  64, 72, 80, 82, 84, 86, 96, 106, 120, 158, 166, 174, 178
-data bins:   active bins 去掉 pilot bins
-```
-
-仍然使用：
-
-```text
-[random probe 256 x3][file preamble 128 x3][payload x1]
-```
-
-生成测试音频：
-
-```bash
-python tx_step6_step4.py
-```
-
-输出文件为 `data/step6_newexp/file_combo_step4trimmed_n512_cp256.wav`，时长约
-`34.368 s`。播放前开始录音，播完后再留 1 秒，建议录制 `37 s`：
-
-```bash
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 1776000 \
-  data/step6_newexp/receive_file_combo_step4trimmed_n512_cp256_1.wav
-```
-
-离线自检：
-
-```bash
-python rx_step6_step4.py data/step6_newexp/file_combo_step4trimmed_n512_cp256.wav \
-  --out runs/step6_newexp/step4trimmed_n512_cp256/offline
-```
-
-分析真实录音：
-
-```bash
-python rx_step6_step4.py data/step6_newexp/receive_file_combo_step4trimmed_n512_cp256_1.wav \
-  --out runs/step6_newexp/step4trimmed_n512_cp256/1
-```
-
-### Step 6c：Step 4 trimmed 频段，N=1024
-
-如果需要回到 Step 4 原始 bin 编号，使用 `N=1024, CP=256` 版本。频段不再映射，
-直接使用 Step 4 trimmed：
-
-```text
-active bins: 128-160, 164-169, 172-240, 315-357
-pilot bins:  128, 136, 144, 152, 160, 164, 169, 172, 180, 188, 196, 204,
-             212, 220, 228, 236, 240, 315, 323, 331, 339, 347, 355, 357
-data bins:   127 个
-```
-
-结构仍为：
-
-```text
-[random probe 256 x3][file preamble 128 x3][payload x1]
-```
-
-生成测试音频：
-
-```bash
-python tx_step6_step4_n1024.py
-```
-
-输出文件为 `data/step6_newexp/file_combo_step4trimmed_n1024_cp256.wav`，时长约
-`43.893 s`。播放前开始录音，播完后再留 1 秒，建议录制 `47 s`：
-
-```bash
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 2256000 \
-  data/step6_newexp/receive_file_combo_step4trimmed_n1024_cp256_1.wav
-```
-
-离线自检：
-
-```bash
-python rx_step6_step4_n1024.py data/step6_newexp/file_combo_step4trimmed_n1024_cp256.wav \
-  --out runs/step6_newexp/step4trimmed_n1024_cp256/offline
-```
-
-分析真实录音：
-
-```bash
-python rx_step6_step4_n1024.py data/step6_newexp/receive_file_combo_step4trimmed_n1024_cp256_1.wav \
-  --out runs/step6_newexp/step4trimmed_n1024_cp256/1
-```
-payload 只发送一次，不做重复投票；每个 payload symbol 的 comb pilots 用于继续更新 H。
-
-## Step 7：在线时钟校正、旋转 Pilot 与软判决 FEC
-
-Step7 不再把一次扫频结果当作永久好频点。它保留较宽的候选频带，使用本次录音中的
-preamble 估计 H 和噪声，再由软判决卷积码处理环境变化造成的低可靠度频点。
-
-Step7 no longer treats one sweep as a permanent good-bin map. It keeps broader
-candidate bands, estimates H and noise from the current recording, and lets
-soft-decision FEC absorb unreliable bins caused by environmental changes.
-
-```text
-N / CP:                 512 / 256
-active bins:            64-120, 158-178
-physical ranges:        6.0-11.25 kHz, 14.8125-16.6875 kHz
-modulation:             BPSK
-pilot:                  rotating comb, spacing 4
-FEC:                    rate-1/2 K=7 convolutional, 171/133 octal
-decoder:                soft-decision Viterbi
-file block:             512 bytes + index/length + CRC32
-header:                 128 bytes, convolutionally coded, sent 3 times
-payload repeats:        1
-```
-
-发送结构 / Transmit structure：
-
-```text
-[noise-only 0.5 s]
-[sync 64]
-[full-band preamble 128 x2]
-[coded header x3]
-[interleaved coded file blocks x1, rotating pilots in every OFDM symbol]
-[tail silence 0.25 s]
-```
-
-接收端只使用 sync 的前 8 个 symbols 做短相关，然后在全部 sync+preamble 内每隔 32
-symbols 放一个 timing anchor。多个 anchor 的位置拟合出录音采样时钟比例，并先重采样到
-发送端符号网格。payload pilot 再逐 symbol 估计公共相位 CPE 和相位斜率，并输出 BPSK
-软 LLR；深衰落 bin 的 LLR 会自然变小，不再和可靠 bin 拥有相同投票权。
-
-The receiver uses only the first 8 sync symbols for robust detection. Timing
-anchors across sync+preamble estimate recorder clock error before payload
-decoding. Rotating pilots then track per-symbol CPE and phase slope and produce
-soft BPSK LLRs; faded bins receive less decoding weight.
-
-### Step7 当前限制 / Current limitation
-
-当前 timing anchors 只覆盖约 5 秒的 sync+preamble。相关峰以整数 sample 定位时，几
-samples 的多径抖动就会造成数 ppm 的斜率误差；对 60 秒以上 payload，这个误差会累计成
-几十 samples。CP 可以避免立即发生符号间干扰，但不能消除相对于训练 H 的逐 bin 相位
-旋转。
-
-The current timing anchors span only the roughly five-second training section.
-Integer-sample correlation jitter can bias the estimated clock by several ppm;
-over a minute-long payload this becomes tens of samples. CP prevents immediate
-ISI, but it does not remove the resulting per-bin phase rotation relative to the
-training H.
-
-TIFF 真实录音中，训练段估计 `+5.12 ppm`，全段已知波形诊断得到 `-3.65 ppm`，相差
-`8.77 ppm`，到结尾累计 `27.6 samples`。开启逐 symbol slope 会被多径污染；关闭 slope
-又无法补偿残余时钟漂移。完整证据和下一版方案见
-[`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
-
-生成音频 / Generate：
-
-```bash
-python tx_step7.py data/step6_newexp/file.jpeg \
-  --out data/step7_adaptive_fec/file_combo_step7_adaptive_fec.wav
-```
-
-当前 `file.jpeg` 生成约 `44.03 s` 的 WAV。payload 文件内容只发送一次。
-
-录音 / Record（建议先录 1 秒，播放 WAV，播完再等 1 秒）：
-
-```bash
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 2304000 \
-  data/step7_adaptive_fec/receive_file_combo_step7_adaptive_fec_1.wav
-```
-
-分析 / Decode：
-
-```bash
-python rx_step7.py \
-  data/step7_adaptive_fec/receive_file_combo_step7_adaptive_fec_1.wav \
-  --out runs/step7_adaptive_fec/1
-```
-
-离线闭环 / Offline loopback：
-
-```bash
-python rx_step7.py data/step7_adaptive_fec/file_combo_step7_adaptive_fec.wav \
-  --out runs/step7_adaptive_fec/offline
-```
-
-主要输出包括 `metrics.json`、`blocks.csv`、`summary.csv`、`H.npy`、`rx_llr.npy`、
-`clock_anchors.npy`、`cpe.npy`、`phase_slope.npy`、`channel_and_noise.png` 和
-`phase_tracking.png`。`coded_bit_error_rate` 是 FEC 前的硬判决误码率；
-`post_fec_bit_error_rate` 是 Viterbi 后、与已知源文件比较的误码率；每个 block 还会独立
-报告 CRC 是否通过。
-
-TIFF 测试命令：
-
-```bash
-python rx_step7.py data/step7_adaptive_fec/receive_observatory_tiff_1.wav \
-  --source data/step7_adaptive_fec/observatory_64_uncompressed.tiff \
-  --out runs/step7_adaptive_fec/observatory_tiff/1
-```
-
-若 TIFF 的 IFD 目录损坏，即使像素主体仍在，标准程序也会拒绝打开。实验分析可以把接收
-到的 `64x64 RGB` 像素主体直接导出成 best-effort PNG，但该 PNG 只是可视化，不代表
-`file_crc_ok=true`。
-
-## 推荐实验顺序
-
-1. 离线文件闭环：
-
-   ```bash
-   python tx.py data/source/file16_test.txt --bins 8 150 --out data/tx/file16_8_150.wav
-   python rx.py data/tx/file16_8_150.wav --bins 8 150 --out runs/recovered_test
-   cmp data/source/file16_test.txt runs/recovered_test/file16_test.txt
-   ```
-
-2. 离线 H 闭环：
-
-   ```bash
-   python probe.py --kind ones --bins 8 150 --symbols 256 --out data/tx/probe_ones_8_150.wav
-   python analyze.py data/tx/probe_ones_8_150.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_loopback
-   ```
-
-3. 真实信道估计：
-
-   播放 `data/tx/probe_ones_8_150.wav`，录成 `data/rx/receive.wav`，然后运行：
-
-   ```bash
-   python analyze.py data/rx/receive.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_ones_8_150
-   ```
-
-4. 真实文件传输：
-
-   ```bash
-   python tx.py data/source/file16_test.txt --bins 8 150 --out data/tx/file16_8_150.wav
-   python rx.py data/rx/receive_file16.wav --bins 8 150 --h runs/probe_ones_8_150/H.npy --out runs/recovered_real
-   ```
-
-5. 一次播放 combo 实验：
-
-   ```bash
-   python tx_combo.py
-   python rx_combo.py data/step2_file/exp2_combo_8_150.wav --out runs/step2_file/combo_8_150/offline
-   ```
-
-   离线通过后，播放 `data/step2_file/exp2_combo_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_8_150_1.wav`，再运行：
-
-   ```bash
-   python rx_combo.py data/step2_file/receive_exp2_combo_8_150_1.wav --out runs/step2_file/combo_8_150/1
-   ```
-
-6. BPSK + pilot 稳定恢复实验：
-
-   ```bash
-   python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav
-   python rx_combo.py data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/offline
-   ```
-
-   离线通过后，播放 `data/step2_file/exp2_combo_bpsk_pilot4_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav`，再运行：
-
-   ```bash
-   python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot4_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --out runs/step2_file/combo_bpsk_pilot4_8_150/1
-   ```
-
-7. BPSK + pilot 平均 + payload 重复投票实验：
-
-   ```bash
-   python tx_combo.py data/step2_file/exp2.txt --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav
-   python rx_combo.py data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/offline
-   ```
-
-   离线通过后，播放 `data/step2_file/exp2_combo_bpsk_pilot2_repeat3_8_150.wav`，录成 `data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav`，再运行：
-
-   ```bash
-   python rx_combo.py data/step2_file/receive_exp2_combo_bpsk_pilot2_repeat3_8_150_1.wav --bins 8 150 --mod bpsk --sync-symbols 128 --pilot-interval 4 --pilot-len 2 --payload-repeats 3 --out runs/step2_file/combo_bpsk_pilot2_repeat3_8_150/1
-   ```
-
-8. 批量组合测试：
-
-   依次测试：
-
-   ```text
-   kind: ones, chirp, step, bandstep
-   bins: 8-420, 8-200, 8-150
-   ```
-
-   每次保持 `probe.py` 和 `analyze.py` 的 `kind/bins/symbols/seed` 完全一致。
+Run archived scripts from the repository root. Their recordings remain under
+the original `data/step*` directories. See `archive/README.md` for the map.
+
+请从项目根目录运行归档脚本；对应录音仍在原 `data/step*` 目录。映射关系见
+`archive/README.md`。

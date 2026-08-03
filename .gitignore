@@ -42,3 +42,4 @@ data/step5_singlebin_sweep/*
 
 # Large generated artifacts that exceed normal GitHub limits
 archive/tmp/
+archive/runs/

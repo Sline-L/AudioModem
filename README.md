@@ -1,58 +1,74 @@
 # AudioModem
 
-面向真实声学信道测试的 OFDM 音频 modem。新主流程固定使用 48 kHz、1024 点 FFT、128 点 CP，payload 支持 BPSK、QPSK 和 16-QAM。
+AudioModem 是一个面向真实声学信道实验的 OFDM 文件传输项目。当前主线是 Step8：在单次
+payload 内加入周期 timing anchors，利用整段录音稳健估计采样时钟 PPM，并同时刷新信道
+响应 H。
 
-英文说明见 [docs/README.md](docs/README.md)。
-代码详解见 [docs/code_guide.md](docs/code_guide.md)。
-技术路线见 [docs/technical_route.md](docs/technical_route.md)。
-Step7 的帧结构、FEC、时钟跟踪和当前问题详见
-[docs/step7_adaptive_fec.md](docs/step7_adaptive_fec.md)。
+AudioModem is an OFDM file-transfer project for real acoustic-channel tests.
+The current Step8 pipeline inserts periodic timing anchors into one payload,
+fits sample-clock PPM across the recording, and refreshes H in-band.
 
-## 结构
+## Current Pipeline / 当前主线
 
-- `audiomodem.py`：核心函数，含 WAV、OFDM、调制、同步头和 probe 生成。
-- `tx.py`：把 `data/source/` 里的文件调制成发送 WAV。
-- `rx.py`：用估计出的 `H.npy` 或理想信道恢复文件。
-- `probe.py`：生成 `ones`、`chirp`、`step`、`bandstep`、`random` 训练信号。
-- `analyze.py`：从录音估计 `H`，输出 `Y`、理论 `Y`、频谱图和汇总。
-- `data/`：`source/` 原文件，`tx/` 发送 WAV，`rx/` 录音。
-- `runs/`：实验输出。
-- `archive/week2_challenge/`：旧 Week2 challenge 代码和结果归档。
+```text
+48 kHz, N=512, CP=256
+active bins 64-120 and 158-178
+BPSK data + rotating QPSK comb pilots
+rate-1/2 K=7 soft convolutional FEC
+512-byte CRC32 blocks
+one payload, timing anchor x8 every 128 logical symbols
+```
 
-当前稳健传输实验使用独立的 `tx_step7.py`、`rx_step7.py` 和 `step7_modem.py`：
-`N=512, CP=256`、旋转 comb pilot、软判决卷积码、512-byte CRC blocks。Step7 不覆盖
-旧版 `audiomodem.py` 的默认参数。
+Step8 real recordings currently recover the 12,936-byte TIFF exactly. The two
+measured raw coded BER values are `6.1069%` and `5.5580%`; FEC reduces both to
+`0%`, with `26/26` blocks and whole-file CRC passing.
 
-## 常用命令
+当前两次真实录音都能精确恢复 12,936-byte TIFF。FEC 前 BER 分别为 `6.1069%` 和
+`5.5580%`，FEC 后均为 `0%`，`26/26` blocks 和整文件 CRC 全部通过。
+
+## Quick Start / 快速开始
 
 ```bash
 pip install -r requirements.txt
-python tx.py data/source/file16_test.txt --bins 8 150 --out data/tx/file16.wav
-python rx.py data/tx/file16.wav --bins 8 150 --out runs/recovered
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 【336000】 data/rx/receive.wav
-(choose) "wpctl status" and then add --target bluez_input.0C:9A:E6:EE:D3:3D
+python tx_step8.py
+python rx_step8.py \
+  data/step8_clock_anchor/observatory_64_uncompressed_step8.wav \
+  --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --phase-slope off \
+  --out runs/step8_clock_anchor/offline
 ```
 
-`tx.py` 默认在 payload 前加入 32 个 OFDM 符号的随机 QPSK 同步头；`rx.py` 默认先互相关同步，再解 payload。旧格式可加 `--no-sync`。
-
-真实录音恢复示例：
+Real recording / 真实录音：
 
 ```bash
-python rx.py data/rx/receive_file16.wav --bins 8 150 --h runs/probe_ones_8_150/H.npy --out runs/recovered_real
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 3552000 \
+  data/step8_clock_anchor/receive_observatory_step8_3.wav
+python rx_step8.py \
+  data/step8_clock_anchor/receive_observatory_step8_3.wav \
+  --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --phase-slope off \
+  --out runs/step8_clock_anchor/3
 ```
 
-切换调制方式：
+## Layout / 目录
 
-```bash
-python tx.py data/source/file16_test.txt --mod qam16 --bins 8 150 --out data/tx/file16_qam16.wav
-python rx.py data/tx/file16_qam16.wav --mod qam16 --bins 8 150 --out runs/recovered_qam16
-```
+- `step8_modem.py`: self-contained PHY, framing, FEC, pilots, timing and H logic.
+- `tx_step8.py`: Step8 WAV and metadata generator.
+- `rx_step8.py`: synchronization, decoding, metrics and plots.
+- `data/step8_clock_anchor/`: current source, transmit WAV and recordings.
+- `runs/step8_clock_anchor/`: current generated analysis.
+- `archive/experiments/`: runnable Step1-Step7 code snapshots.
+- `archive/runs/`: local pre-Step8 results, ignored by Git.
+- `docs/`: protocol, code guide, technical route, history and TUI design.
 
-生成 probe 并分析录音：
+Step8 已不再导入 Step7 或旧版 `audiomodem.py`。历史代码及其依赖保存在
+[`archive/README.md`](archive/README.md)。
 
-```bash
-python probe.py --kind ones --bins 8 150 --symbols 256 --out data/tx/probe.wav
-python analyze.py data/rx/receive.wav --kind ones --bins 8 150 --symbols 256 --out runs/probe_ones_8_150
-```
+## Documentation / 文档
 
-后续重点测试 probe：`ones`、`chirp`、`step`、`bandstep`；三组频段：`8 420`、`8 200`、`8 150`。
+- [Documentation index / 文档索引](docs/README.md)
+- [Step8 complete protocol / Step8 完整协议](docs/step8_clock_anchor.md)
+- [Code guide / 代码指南](docs/code_guide.md)
+- [Technical route / 技术路线](docs/technical_route.md)
+- [Experiment history / 实验历史](docs/experiment_history.md)
+- [TUI feasibility / TUI 可行性](docs/tui_feasibility.md)

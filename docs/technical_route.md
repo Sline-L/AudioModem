@@ -1,92 +1,104 @@
-# 技术路线简要总结
+# Technical Route / 技术路线
 
-本项目的目标是用 48 kHz 声音信号完成真实声学信道下的 OFDM 文件传输。早期路线分为三步：先估计信道 `H`，再利用 `H` 恢复真实 payload，最后通过分段扫频调整实际可用频段。Step4-Step6 已证明固定扫频结果会随房间和位置变化，因此当前主路线转为 Step7：宽候选频带、同帧训练、在线时钟跟踪、旋转 pilot、软判决 FEC 和逐块 CRC。
+## Goal / 目标
 
-Step7 详细设计和当前问题见 [`step7_adaptive_fec.md`](step7_adaptive_fec.md)。
+The project sends arbitrary files through a real speaker-room-microphone path
+using 48 kHz OFDM. The design goal is exact file recovery verified by CRC, not
+merely a recognizable image or a low average constellation error.
 
-## 当前主路线：Step7
+本项目使用 48 kHz OFDM 通过真实扬声器、房间和麦克风传输任意文件。目标是经 CRC 验证的
+精确恢复，而不只是得到一张大致可辨认的图片。
 
-```text
-[noise-only][short sync][full-band preamble x2]
-[strong coded header x3]
-[single payload: rotating pilots + interleaved convolutional code + block CRC]
-```
+## Evolution / 演进
 
-- 扫频只用于确定跨设备候选频带，不再永久删除某个房间中的一次坏点。
-- sync+preamble 给出初始 H、噪声和采样时钟比例。
-- rotating pilot 跟踪 payload 中的公共相位和频率选择性变化。
-- BPSK soft LLR 进入 rate-1/2 K=7 Viterbi；每 512 bytes 独立 CRC32。
-- 下一阶段优先解决长 payload 的采样时钟估计，不继续依据单次扫频删 bins。
+### Step1-Step3: H and broad sweeps / H 与宽频扫频
 
-当前 TIFF 录音证明，稳定电平下仅 `8.77 ppm` 的时钟估计偏差也会在约 67 秒内累计
-`27.6 samples`。正式解码关闭 slope 时只有 `15/26` blocks 通过；诊断性地使用全段
-真实比例后，裸 BER 降到 `1.39%-1.57%`，FEC 恢复 `26/26` blocks。下一版应在 payload
-插入周期性 timing anchors，或对 pilot phase slope 做长时间稳健估计，再缓慢调整重采样
-比例。
+Early experiments measured `H=Y/X`, compared BPSK/QPSK/QAM16 and swept broad
+frequency bands. They established that BPSK was the realistic modulation for
+the current hardware and that H must be measured in the same playback.
 
-## 1. 信道估计
+早期实验测量 `H=Y/X`，比较多种调制和宽频段，确认当前硬件应优先使用 BPSK，并且 H 应在
+同一次播放内测量。
 
-先分别发射 `ones` 和 `random` 两类 probe，并在扬声器和麦克风位置固定的情况下多次录音。
+### Step4-Step6: frequency selection / 频点筛选
 
-- `ones`：所有目标频点同时发射 `1+0j`，便于直观看每个频点的幅度和相位响应。
-- `random`：每个频点发射随机 QPSK 符号，更接近真实数据传输状态，适合做稳健的平均估计。
+Bandstep and 1.5-second single-bin sweeps found narrow bad points and produced
+non-contiguous masks. Step4 once reached roughly 2%-3% BER, but changing room or
+recording position invalidated the mask. Sweeps remain useful for identifying
+hardware-wide unusable ranges, not as permanent room calibration.
 
-每次录音后用 `analyze.py` 得到一次 `H.npy`。对多次测试得到的 `H` 做复数平均，得到更稳定的平均信道响应：
+Bandstep 和逐点 1.5 秒扫频发现了窄带坏点并形成非连续频点。Step4 一度达到约 2%-3%
+BER，但换位置后 mask 立即失效。因此扫频适合排除设备长期不可用频段，不适合作为永久房间
+标定。
 
-```text
-H_avg[k] = mean(H_1[k], H_2[k], ..., H_n[k])
-```
+### Step7: coding and in-frame adaptation / 编码与帧内适应
 
-后续文件解调统一使用这个 `H_avg`，而不是只依赖单次录音结果。
+Step7 moved to N=512/CP=256, rotating pilots, same-frame training, soft
+rate-1/2 convolutional FEC and independent CRC blocks. It proved that FEC could
+correct frequency-selective raw errors, but a biased PPM estimate from the short
+opening training accumulated 27.6 samples over a long TIFF payload.
 
-## 2. 文件传输与误码率测试
+Step7 使用 N=512/CP=256、旋转 pilot、同帧训练、软卷积码和独立 CRC blocks。它证明 FEC
+可以修复频率选择性错误，但开头短训练的 PPM 偏差会在长 TIFF 中累计 27.6 samples。
 
-保持扬声器、麦克风、音量和录音增益不变，选择一个文本或图片文件进行编码发送。
+### Step8: whole-recording timing anchors / 全段时钟锚点
 
-发送端流程：
+Step8 inserts eight known QPSK rows every 128 logical payload symbols. Anchors
+provide absolute positions for robust PPM fitting and periodic full-band H
+refresh while the file payload remains single-copy.
 
-```text
-source file -> payload bits -> BPSK/QPSK/16-QAM -> OFDM -> speaker
-```
+Step8 每 128 个逻辑 payload symbols 插入 8 个已知 QPSK rows，同时提供全段 PPM 拟合和
+周期全频 H 刷新，文件 payload 仍只发送一次。
 
-接收端流程：
-
-```text
-microphone recording -> sync -> FFT 得到 Y -> X_hat = Y / H_avg -> 判决 -> recovered file
-```
-
-恢复后把接收文件和源文件逐 bit 或逐 byte 比较，得到误码率：
+Two real recordings now recover the TIFF exactly:
 
 ```text
-BER = error_bits / total_bits
+recording 1   raw BER 6.1069%, post-FEC 0%, 26/26, exact
+recording 2   raw BER 5.5580%, post-FEC 0%, 26/26, exact
 ```
 
-同时保存接收频域符号 `Y`、均衡后的符号 `X_hat` 和恢复文件，方便对比不同调制方式、不同频段下的稳定性。
+The second recording also survived intentional late noise. The current default
+is therefore:
 
-## 3. 频段选择
-
-最后发射 `bandstep` probe 做分段扫频。`bandstep` 每次只激励一小段连续频率，然后跳到下一段，因此适合观察哪些频段在真实扬声器和麦克风链路中更稳定。
-
-重点比较三组频段：
-
-- `8-150`：保守范围，通常更稳，速率较低。
-- `8-200`：折中范围，适合优先尝试。
-- `8-420`：频带最宽，速率最高，但更容易受高频衰减和设备响应影响。
-
-根据 `bandstep` 的 `Y_spectrum.png`、`H.png` 和 BER 结果，选择实际可用的 bins 范围。最终目标是在稳定 BER 和传输速率之间取得平衡。
-
-## 推荐实验顺序
-
-```bash
-python probe.py --kind ones --bins 8 200 --symbols 256 --out data/tx/probe_ones_8_200.wav
-python analyze.py data/rx/receive_ones.wav --kind ones --bins 8 200 --symbols 256 --out runs/probe_ones_8_200
-
-python probe.py --kind random --bins 8 200 --symbols 256 --out data/tx/probe_random_8_200.wav
-python analyze.py data/rx/receive_random.wav --kind random --bins 8 200 --symbols 256 --out runs/probe_random_8_200
-
-python tx.py data/source/file16_test.txt --mod qpsk --bins 8 200 --h runs/H_avg.npy --out data/tx/file16_8_200.wav
-python rx.py data/rx/receive_file16.wav --mod qpsk --bins 8 200 --h runs/H_avg.npy --out runs/recovered_file16
-
-python probe.py --kind bandstep --bins 8 420 --symbols 512 --out data/tx/probe_bandstep_8_420.wav
-python analyze.py data/rx/receive_bandstep.wav --kind bandstep --bins 8 420 --symbols 512 --out runs/probe_bandstep_8_420
+```text
+anchor H alpha 0.5
+per-symbol CPE on
+phase slope off
+soft FEC and CRC on
 ```
+
+## Current Data Path / 当前数据流
+
+```text
+file
+ -> CRC header and 512-byte CRC blocks
+ -> independent interleaving and K=7 rate-1/2 convolutional FEC
+ -> BPSK data + rotating QPSK comb pilots
+ -> periodic full-band QPSK timing anchors
+ -> real OFDM waveform
+ -> acoustic channel
+ -> anchor-based resampling and same-frame H
+ -> CPE/H tracking and soft LLR
+ -> Viterbi, block CRC and whole-file CRC
+ -> exact file or explicit partial result
+```
+
+## Remaining Priorities / 后续重点
+
+1. Bound payload processing after header decode so trailing silence cannot create
+   diagnostic-only fake anchors.
+2. Improve multipath-consistent anchor peak tracking without using source bytes.
+3. Measure FEC margin with controlled noise, distance and device changes rather
+   than deleting bins after each room change.
+4. Compare stronger block codes only after establishing repeatable Step8 test
+   fixtures and rate/latency targets.
+5. Add a TUI for reproducible experiment operation; it should orchestrate the
+   modem, not duplicate DSP logic.
+
+1. Header 解码后限制物理 payload 长度，消除尾部静音产生的诊断假 anchor。
+2. 在不使用源文件的前提下，提高多径环境中 anchor 峰路径的一致性。
+3. 用可控噪声、距离和设备变化评估 FEC 余量，不再每换房间就重新删 bins。
+4. 在 Step8 测试夹具和速率目标稳定后，再比较更强 block code。
+5. 增加保证实验可复现的 TUI，但界面只编排任务，不复制 DSP。
+
+Full protocol / 完整协议：[`step8_clock_anchor.md`](step8_clock_anchor.md).

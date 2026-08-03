@@ -1,9 +1,0 @@
-{
-  "method": "majority_17_19_plus_forced_known_header",
-  "body_len": 4402,
-  "body_match": false,
-  "bit_errors_after_header_force": 1440,
-  "byte_errors_after_header_force": 1070,
-  "bit_error_rate_after_header_force": 0.04076086956521739,
-  "preview": "\ufffdhis!is a pasv \ufffdiLU. Tbis is i testb\ufffdile. This is ` te\ufffdt fi\ufffde. ThIs0ms l tesd file> \nt`is is a test F\ufffdle. Tlis i3 a test fqlm. Thi\ufffd is q\"tesT fH,e. Dhis iw c TeSv file. \nThis is `!tesp file. Thks \ufffds a qest fyLe* Thi\u007f is2a tes4 f\ufffdle( \\his is a tes$ fml%. \n\u0014hIq is a\ufffdtes4 file.`Tjk\ufffd hq\ufffda test fi\ufffde. Phks iR\ufffda tesu file. This!is a vest$file. \u000eRhis is a tEsd fhee. T`is is ! Tmst vile\u000e This is i peCt file. This Is a tes| &ilu. \u000bT\ufffdis is a test file\ufffd tHis is a test$fil%n Thms is a teqt \ufffd\ufffdle.(Tlis as a#tdzt file. \n\nH%llc World! Hello Wo2xd%\u0000Hell/ World! \ufffdellO Wor\ufffdd! Hello Wob,\ufffd! \nHello Wopld!\u0000Iello Worl"
-}
