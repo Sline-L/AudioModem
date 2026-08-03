@@ -17,6 +17,8 @@ from step8_modem import (
     L,
     N,
     PILOT_SEED,
+    PAYLOAD_START_ANCHOR_SEED,
+    PAYLOAD_START_ANCHOR_SYMBOLS,
     TIMING_ANCHOR_INTERVAL,
     TIMING_ANCHOR_SEED,
     TIMING_ANCHOR_SYMBOLS,
@@ -27,6 +29,7 @@ from step8_modem import (
     detect_clock_anchors,
     encoded_length,
     estimate_training,
+    estimate_anchor_channel,
     find_sync,
     noise_variance,
     ofdm_rx,
@@ -34,6 +37,8 @@ from step8_modem import (
     parse_data_block,
     parse_header,
     payload_llrs_anchored,
+    payload_start_anchor_symbols,
+    correlate_near,
     profile_meta,
     read_wav,
     training_symbols,
@@ -63,6 +68,9 @@ def args():
     p.add_argument("--timing-anchor-interval", type=int, default=TIMING_ANCHOR_INTERVAL)
     p.add_argument("--timing-anchor-symbols", type=int, default=TIMING_ANCHOR_SYMBOLS)
     p.add_argument("--timing-anchor-seed", type=int, default=TIMING_ANCHOR_SEED)
+    p.add_argument("--payload-start-anchor-symbols", type=int, default=PAYLOAD_START_ANCHOR_SYMBOLS)
+    p.add_argument("--payload-start-anchor-seed", type=int, default=PAYLOAD_START_ANCHOR_SEED)
+    p.add_argument("--payload-start-anchor-h-alpha", type=float, default=0.5)
     p.add_argument("--anchor-h-alpha", type=float, default=0.5)
     p.add_argument("--anchor-min-score", type=float, default=0.12)
     p.add_argument("--training-anchor-symbols", type=int, default=8)
@@ -96,7 +104,9 @@ def validate(a):
         raise SystemExit("--sync-correlation-symbols must be between 1 and --sync-symbols")
     if a.training_anchor_symbols > a.sync_symbols + a.preamble_symbols * a.preamble_repeats:
         raise SystemExit("--training-anchor-symbols exceeds the complete training sequence")
-    for name in ("channel_alpha", "anchor_h_alpha"):
+    if a.payload_start_anchor_symbols < 0:
+        raise SystemExit("--payload-start-anchor-symbols must be >= 0")
+    for name in ("channel_alpha", "anchor_h_alpha", "payload_start_anchor_h_alpha"):
         if not 0 <= getattr(a, name) <= 1:
             raise SystemExit(f"--{name.replace('_', '-')} must be between 0 and 1")
     if not 0 <= a.anchor_min_score <= 1:
@@ -295,6 +305,8 @@ def run_one(receive, out, a, sync, preamble_blocks):
         a.timing_anchor_interval,
         a.timing_anchor_symbols,
         a.timing_anchor_seed,
+        a.payload_start_anchor_symbols,
+        a.payload_start_anchor_seed,
         a.clock_search,
         a.anchor_min_score,
     )
@@ -320,10 +332,44 @@ def run_one(receive, out, a, sync, preamble_blocks):
     if any(len(y) != len(x) for y, x in zip(y_blocks, x_blocks)):
         raise ValueError("recording ends inside Step8 preamble")
     h, h_blocks, training_var = estimate_training(y_blocks, x_blocks)
+    h_training = h.copy()
 
-    payload_start, payload_delta, alignment_score = choose_payload_start(
-        corrected, preamble_end, h, training_var, silence_var, a
-    )
+    start_anchor_h = np.empty((0, len(ACTIVE_BINS)), complex)
+    start_anchor_score = None
+    start_anchor_start = None
+    start_anchor_status = "disabled"
+    if a.payload_start_anchor_symbols:
+        start_known = payload_start_anchor_symbols(
+            a.payload_start_anchor_symbols, a.payload_start_anchor_seed
+        )
+        start_template = ofdm_tx(start_known)
+        start_anchor_position, start_anchor_score = correlate_near(
+            corrected, start_template, preamble_end, a.payload_search
+        )
+        if start_anchor_score >= a.anchor_min_score:
+            start_anchor_start = int(round(start_anchor_position))
+            start_anchor_status = "detected"
+        else:
+            start_anchor_start = preamble_end
+            start_anchor_status = "structural_fallback"
+        start_y = ofdm_rx(
+            corrected[
+                start_anchor_start : start_anchor_start + a.payload_start_anchor_symbols * L
+            ]
+        )
+        start_h = estimate_anchor_channel(start_y, start_known, h)
+        h = (
+            (1.0 - a.payload_start_anchor_h_alpha) * h
+            + a.payload_start_anchor_h_alpha * start_h
+        )
+        start_anchor_h = start_h[None, :]
+        payload_start = start_anchor_start + a.payload_start_anchor_symbols * L
+        payload_delta = start_anchor_start - preamble_end
+        alignment_score = 1.0 - start_anchor_score
+    else:
+        payload_start, payload_delta, alignment_score = choose_payload_start(
+            corrected, preamble_end, h, training_var, silence_var, a
+        )
     payload_y = ofdm_rx(corrected[payload_start:])
     track = payload_llrs_anchored(
         payload_y,
@@ -343,7 +389,8 @@ def run_one(receive, out, a, sync, preamble_blocks):
     llr = track["llr"]
 
     out.mkdir(parents=True, exist_ok=True)
-    np.save(out / "H.npy", h)
+    np.save(out / "H.npy", h_training)
+    np.save(out / "H_payload_start_anchor.npy", start_anchor_h)
     np.save(out / "H_training_blocks.npy", h_blocks)
     np.save(out / "H_anchor_track.npy", track["anchor_H"])
     np.save(out / "training_noise.npy", training_var)
@@ -433,6 +480,12 @@ def run_one(receive, out, a, sync, preamble_blocks):
         "payload_start_corrected": int(payload_start),
         "payload_start": float(clock_intercept + payload_start * clock_scale),
         "structural_payload_start": int(preamble_end),
+        "payload_start_anchor_start_corrected": start_anchor_start,
+        "payload_start_anchor_score": start_anchor_score,
+        "payload_start_anchor_status": start_anchor_status,
+        "payload_start_anchor_symbols": int(a.payload_start_anchor_symbols),
+        "payload_start_anchor_seed": int(a.payload_start_anchor_seed),
+        "payload_start_anchor_h_alpha": float(a.payload_start_anchor_h_alpha),
         "payload_delta": int(payload_delta),
         "payload_alignment_score": float(alignment_score),
         "payload_physical_symbols_received": int(len(payload_y)),
@@ -477,6 +530,9 @@ def run_one(receive, out, a, sync, preamble_blocks):
             "timing_anchor_interval": int(a.timing_anchor_interval),
             "timing_anchor_symbols": int(a.timing_anchor_symbols),
             "timing_anchor_seed": int(a.timing_anchor_seed),
+            "payload_start_anchor_symbols": int(a.payload_start_anchor_symbols),
+            "payload_start_anchor_seed": int(a.payload_start_anchor_seed),
+            "payload_start_anchor_h_alpha": float(a.payload_start_anchor_h_alpha),
         }
     )
     (out / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")

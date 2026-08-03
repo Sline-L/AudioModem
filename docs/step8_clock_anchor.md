@@ -55,6 +55,7 @@ H、pilot、anchor 和 FEC 适应当前录音。
 [sync 64 symbols, seed 7026]
 [preamble 128 symbols, seed 8026]
 [preamble 128 symbols, seed 8027]
+[payload-start anchor 8 symbols, seed 10028]
 [logical payload x128][timing anchor x8]
 [logical payload x128][timing anchor x8]
 ...
@@ -76,8 +77,9 @@ logical payload symbols     3809
 timing anchor groups        29
 anchor symbols              232
 physical payload symbols    4041
-anchor overhead             5.741% of physical payload symbols
-total WAV duration          70.526 s
+periodic anchor overhead    5.741% of physical payload symbols
+payload-start anchor        8 symbols / 0.128 s
+total WAV duration          70.654 s
 ```
 
 An anchor does not consume a payload bit or advance the rotating-pilot logical
@@ -208,15 +210,27 @@ and reduced valid blocks from `26/26` to `19/26`.
 第一份真实录音关闭 anchor H 后，FEC 前 BER 从 `6.11%` 上升到 `7.02%`，有效 blocks 从
 `26/26` 降到 `19/26`，因此默认必须保留。
 
+The dedicated payload-start anchor is placed immediately before the encoded
+header. After global clock correction, the receiver correlates its unique
+eight-symbol template within `+-16 samples`, uses that exact OFDM grid to
+estimate full-band H, and starts header demodulation after the anchor. This
+prevents a weak comb-pilot score from selecting a plausible but phase-ramped
+position inside the cyclic prefix.
+
+专用 payload-start anchor 紧贴编码 header 之前。全局校时后，接收端在 `+-16 samples`
+内相关其唯一的 8-symbol 模板，在同一 OFDM 采样网格上估计全频 H，然后从 anchor 之后开始
+解 header。这避免低信噪比时 comb-pilot 把 CP 内某个带相位斜率的位置误选为 payload 起点。
+
 ## 8. Timing Anchors and PPM / Timing Anchor 与 PPM
 
-Anchor `i` uses random QPSK seed `9028+i`, so every anchor has a known unique
+The start anchor uses seed `10028`; periodic anchor `i` uses random QPSK seed
+`9028+i`, so every anchor has a known unique
 template. Around each predicted position the receiver performs normalized
 correlation within `+-128 samples`; a three-point parabola estimates the
 fractional peak position.
 
-第 `i` 组 anchor 使用 seed `9028+i`。接收端在理论位置附近 `+-128 samples` 做归一化互
-相关，并用三点抛物线得到亚采样峰值。
+起始 anchor 使用 seed `10028`，第 `i` 组周期 anchor 使用 seed `9028+i`。接收端在理论
+位置附近 `+-128 samples` 做归一化互相关，并用三点抛物线得到亚采样峰值。
 
 The accepted positions fit:
 
@@ -244,11 +258,14 @@ clock_status = training_fallback
 退回 training 估计，不把退化状态伪装成全段校正。
 
 The recording is globally resampled once using the fitted intercept and scale.
-The receiver then performs a `+-16 sample` payload-start search scored only by
-known pilot residual, not source bytes.
+The receiver then locates the known payload-start anchor within `+-16 samples`.
+Its correlation and H estimate use no source bytes. Set
+`--payload-start-anchor-symbols 0` only to decode the older Step8 air format;
+that compatibility mode restores the pilot-residual start search.
 
-拟合后先对整段录音做一次全局重采样，再在 payload 起点附近 `+-16 samples` 搜索；评分只用
-已知 pilot residual，不使用源文件。
+拟合后先对整段录音做一次全局重采样，再在 `+-16 samples` 内定位已知 payload-start
+anchor；相关与 H 估计均不使用源文件。只有解旧 Step8 空中格式时才设置
+`--payload-start-anchor-symbols 0`，此兼容模式会恢复旧 pilot-residual 起点搜索。
 
 ## 9. Phase Slope Policy / Phase Slope 策略
 
@@ -280,7 +297,8 @@ WAV validation
   -> robust full-recording clock fit or explicit fallback
   -> global fractional resampling
   -> sync + preamble H/noise estimation
-  -> pilot-only payload-start fine search
+  -> payload-start anchor correlation and full-band H refresh
+  -> begin header demodulation immediately after the start anchor
   -> remove physical anchors while producing logical-symbol LLRs
   -> per-symbol CPE and H tracking
   -> combine three interleaved header copies

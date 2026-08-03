@@ -16,7 +16,7 @@ active bins 64-120 and 158-178
 BPSK data + rotating QPSK comb pilots
 rate-1/2 K=7 soft convolutional FEC
 512-byte CRC32 blocks
-one payload, timing anchor x8 every 128 logical symbols
+one payload-start anchor x8, then one payload with timing anchor x8 every 128 logical symbols
 ```
 
 Step8 real recordings currently recover the 12,936-byte TIFF exactly. The two
@@ -46,6 +46,7 @@ pw-record --rate 48000 --channels 1 --format s16 --sample-count 3552000 \
 python rx_step8.py \
   data/step8_clock_anchor/receive_observatory_step8_3.wav \
   --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --payload-start-anchor-symbols 0 \
   --phase-slope off \
   --out runs/step8_clock_anchor/3
 ```
@@ -68,6 +69,7 @@ Step8 已不再导入 Step7 或旧版 `audiomodem.py`。历史代码及其依赖
 
 - [Documentation index / 文档索引](docs/README.md)
 - [Step8 complete protocol / Step8 完整协议](docs/step8_clock_anchor.md)
+- [Step8 end-to-end walkthrough / Step8 端到端工程详解](docs/step8_end_to_end_walkthrough.md)
 - [Code guide / 代码指南](docs/code_guide.md)
 - [Technical route / 技术路线](docs/technical_route.md)
 - [Experiment history / 实验历史](docs/experiment_history.md)

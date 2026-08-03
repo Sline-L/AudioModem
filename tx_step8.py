@@ -12,10 +12,13 @@ from step8_modem import (
     HEADER_REPEATS,
     L,
     PILOT_SEED,
+    PAYLOAD_START_ANCHOR_SEED,
+    PAYLOAD_START_ANCHOR_SYMBOLS,
     coded_frames,
     frame_payload,
     ofdm_tx,
     payload_symbols,
+    payload_start_anchor_symbols,
     profile_meta,
     TIMING_ANCHOR_INTERVAL,
     TIMING_ANCHOR_SEED,
@@ -48,11 +51,13 @@ def args():
     p.add_argument("--timing-anchor-interval", type=int, default=TIMING_ANCHOR_INTERVAL)
     p.add_argument("--timing-anchor-symbols", type=int, default=TIMING_ANCHOR_SYMBOLS)
     p.add_argument("--timing-anchor-seed", type=int, default=TIMING_ANCHOR_SEED)
+    p.add_argument("--payload-start-anchor-symbols", type=int, default=PAYLOAD_START_ANCHOR_SYMBOLS)
+    p.add_argument("--payload-start-anchor-seed", type=int, default=PAYLOAD_START_ANCHOR_SEED)
     p.add_argument("--tail-seconds", type=float, default=0.25)
     p.add_argument(
         "--out",
         type=Path,
-        default=Path("data/step8_clock_anchor/observatory_64_uncompressed_step8.wav"),
+        default=Path("data/step8_clock_anchor/observatory_64_uncompressed_step8_start_anchor.wav"),
     )
     return p.parse_args()
 
@@ -72,6 +77,8 @@ def validate(a):
     for name in positive:
         if getattr(a, name) < 1:
             raise SystemExit(f"--{name.replace('_', '-')} must be >= 1")
+    if a.payload_start_anchor_symbols < 0:
+        raise SystemExit("--payload-start-anchor-symbols must be >= 0")
     if a.block_size > 65535:
         raise SystemExit("--block-size must be <= 65535")
     if a.noise_seconds < 0 or a.tail_seconds < 0:
@@ -99,13 +106,21 @@ def main():
     tail_samples = int(round(a.tail_seconds * FS))
     sync_wave = ofdm_tx(sync)
     preamble_wave = ofdm_tx(np.vstack(preamble_blocks))
+    start_anchor = payload_start_anchor_symbols(
+        a.payload_start_anchor_symbols, a.payload_start_anchor_seed
+    )
+    start_anchor_wave = ofdm_tx(start_anchor)
     payload_wave = ofdm_tx(physical_payload)
-    raw = np.r_[np.zeros(noise_samples), sync_wave, preamble_wave, payload_wave, np.zeros(tail_samples)]
+    raw = np.r_[
+        np.zeros(noise_samples), sync_wave, preamble_wave, start_anchor_wave,
+        payload_wave, np.zeros(tail_samples)
+    ]
     gain = wav_gain(raw)
     write_wav(a.out, raw)
 
     np.save(a.out.with_suffix(".sync.npy"), sync)
     np.save(a.out.with_suffix(".preamble.npy"), np.vstack(preamble_blocks))
+    np.save(a.out.with_suffix(".start_anchor.npy"), start_anchor)
     np.save(a.out.with_suffix(".anchor_starts.npy"), anchor_starts)
     if len(anchor_starts):
         all_anchors = np.asarray(
@@ -142,13 +157,18 @@ def main():
         "timing_anchor_interval": int(a.timing_anchor_interval),
         "timing_anchor_symbols": int(a.timing_anchor_symbols),
         "timing_anchor_seed": int(a.timing_anchor_seed),
+        "payload_start_anchor_symbols": int(a.payload_start_anchor_symbols),
+        "payload_start_anchor_seed": int(a.payload_start_anchor_seed),
         "timing_anchor_count": int(len(anchor_starts)),
         "timing_anchor_overhead_symbols": int(len(anchor_starts) * a.timing_anchor_symbols),
         "timing_anchor_overhead_fraction": float(
             len(anchor_starts) * a.timing_anchor_symbols / max(1, len(physical_payload))
         ),
         "gain": float(gain),
-        "payload_start_sample": int(noise_samples + len(sync_wave) + len(preamble_wave)),
+        "payload_start_anchor_sample": int(noise_samples + len(sync_wave) + len(preamble_wave)),
+        "payload_start_sample": int(
+            noise_samples + len(sync_wave) + len(preamble_wave) + len(start_anchor_wave)
+        ),
         "total_samples": int(len(raw)),
         "seconds": float(len(raw) / FS),
     }
@@ -158,6 +178,8 @@ def main():
             "timing_anchor_interval": int(a.timing_anchor_interval),
             "timing_anchor_symbols": int(a.timing_anchor_symbols),
             "timing_anchor_seed": int(a.timing_anchor_seed),
+            "payload_start_anchor_symbols": int(a.payload_start_anchor_symbols),
+            "payload_start_anchor_seed": int(a.payload_start_anchor_seed),
             "block_size": int(a.block_size),
             "header_repeats": int(a.header_repeats),
         }
@@ -170,6 +192,7 @@ def main():
     print(
         f"structure=noise {a.noise_seconds:.3f}s + sync {len(sync)} + "
         f"preamble {a.preamble_symbols}x{a.preamble_repeats} + "
+        f"start_anchor {a.payload_start_anchor_symbols} + "
         f"payload x1 with anchor {a.timing_anchor_symbols}/{a.timing_anchor_interval}"
     )
     print(f"timing_anchors={len(anchor_starts)} overhead_seconds={len(anchor_starts) * a.timing_anchor_symbols * L / FS:.3f}")

@@ -10,6 +10,10 @@ Step8 是当前正式实现。旧实验代码保存在 `archive/experiments/`，
 
 - [Step8 complete protocol / Step8 完整协议](step8_clock_anchor.md): PHY,
   framing, FEC, pilots, timing, H, receiver flow, outputs and measured results.
+- [Step8 end-to-end walkthrough / Step8 端到端工程详解](step8_end_to_end_walkthrough.md):
+  follows one file through framing, coding, audio transmission, synchronization,
+  channel estimation, soft decoding, CRC validation, and file recovery, with the
+  implementation mathematics at every stage.
 - [Code guide / 代码指南](code_guide.md): current CLI parameters, commands,
   metadata and result files.
 - [Technical route / 技术路线](technical_route.md): why the design evolved from

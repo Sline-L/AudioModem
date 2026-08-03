@@ -68,6 +68,7 @@ Important transmitter options / 主要发送参数：
 | `--header-repeats` | `3` | independently interleaved header copies |
 | `--timing-anchor-interval` | `128` | logical payload symbols between anchors |
 | `--timing-anchor-symbols` | `8` | QPSK symbols in each anchor |
+| `--payload-start-anchor-symbols` | `8` | dedicated full-band anchor before header; `0` makes old format |
 | `--tail-seconds` | `0.25` | trailing silence |
 | `--out` | Step8 WAV | transmit WAV path |
 
@@ -77,16 +78,17 @@ Generated sidecars / 生成的 sidecars：
 *.meta.json          full profile, frame sizes, seeds and duration
 *.sync.npy           known sync symbols
 *.preamble.npy       known H-training symbols
+*.start_anchor.npy   known payload-start anchor symbols
 *.anchor_starts.npy  physical payload-symbol offsets
 *.anchors.npy        all known payload anchor symbols
 ```
 
 ## 3. Record / 录音
 
-The default TIFF WAV is `70.526 s`. A 74-second recording leaves margins before
+The default TIFF WAV is `70.654 s`. A 74-second recording leaves margins before
 and after playback:
 
-默认 TIFF WAV 长 `70.526 s`，建议录制 74 秒：
+默认 TIFF WAV 长 `70.654 s`，建议录制 74 秒：
 
 ```bash
 pw-record --rate 48000 --channels 1 --format s16 --sample-count 3552000 \
@@ -114,6 +116,7 @@ Real recording / 真实录音：
 ```bash
 python rx_step8.py data/step8_clock_anchor/receive_observatory_step8_3.wav \
   --source data/step8_clock_anchor/observatory_64_uncompressed.tiff \
+  --payload-start-anchor-symbols 0 \
   --phase-slope off \
   --out runs/step8_clock_anchor/3
 ```
@@ -135,9 +138,10 @@ Important receiver options / 主要接收参数：
 | `--source` | Step8 TIFF | optional truth, used only for BER/file comparison |
 | `--channel-alpha` | `0.35` | comb-pilot H update strength |
 | `--anchor-h-alpha` | `0.5` | full-band anchor H fusion; `0` disables it |
+| `--payload-start-anchor-h-alpha` | `0.5` | start-anchor H fusion before header |
 | `--anchor-min-score` | `0.12` | minimum normalized anchor correlation |
 | `--clock-search` | `128` | local anchor search radius in samples |
-| `--payload-search` | `16` | payload-start fine search radius |
+| `--payload-search` | `16` | start-anchor fine-search radius |
 | `--phase-slope` | `off` | `off` or controlled experiment `slow` |
 | `--slope-window` | `64` | robust history length in slow mode |
 | `--slope-clip` | `0.05` | maximum applied rad/bin slope |
@@ -160,8 +164,9 @@ only used after decoding to report BER and exact file match.
 | `decoded_header.bin` | raw decoded 128-byte header |
 | `clock_anchors.npy` | nominal/observed positions, score, residual and acceptance |
 | `clock_fit.png` | whole-recording timing fit and residuals |
-| `H.npy` | initial sync+preamble channel estimate |
+| `H.npy` | initial sync+preamble channel estimate, before start-anchor fusion |
 | `H_training_blocks.npy` | phase-aligned training H estimates |
+| `H_payload_start_anchor.npy` | full-band H measured immediately before header |
 | `H_anchor_track.npy` | periodic full-active-band anchor H estimates |
 | `pilot_H_track.npy` | per-logical-symbol tracked channel |
 | `rx_llr.npy` | soft coded-bit decisions |

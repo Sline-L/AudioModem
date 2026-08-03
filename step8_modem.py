@@ -343,10 +343,16 @@ PROFILE = "clock_anchor_n512_cp256"
 TIMING_ANCHOR_INTERVAL = 128
 TIMING_ANCHOR_SYMBOLS = 8
 TIMING_ANCHOR_SEED = 9028
+PAYLOAD_START_ANCHOR_SYMBOLS = 8
+PAYLOAD_START_ANCHOR_SEED = 10028
 
 
 def timing_anchor_symbols(index, rows=TIMING_ANCHOR_SYMBOLS, seed=TIMING_ANCHOR_SEED):
     return random_qpsk(rows, ACTIVE_BINS, seed + index)
+
+
+def payload_start_anchor_symbols(rows=PAYLOAD_START_ANCHOR_SYMBOLS, seed=PAYLOAD_START_ANCHOR_SEED):
+    return random_qpsk(rows, ACTIVE_BINS, seed)
 
 
 def frame_payload(payload, interval=TIMING_ANCHOR_INTERVAL, anchor_rows=TIMING_ANCHOR_SYMBOLS, seed=TIMING_ANCHOR_SEED):
@@ -440,6 +446,8 @@ def detect_clock_anchors(
     interval,
     anchor_rows,
     anchor_seed,
+    start_anchor_rows,
+    start_anchor_seed,
     radius,
     min_score,
 ):
@@ -461,11 +469,24 @@ def detect_clock_anchors(
     train_i, train_scale, _, train_used = robust_clock_fit(
         np.asarray(nominal)[train_mask], np.asarray(observed)[train_mask], np.asarray(scores)[train_mask]
     )
+    if start_anchor_rows:
+        anchor_nominal = float(len(training) * L)
+        expected = train_i + train_scale * anchor_nominal
+        template = ofdm_tx(payload_start_anchor_symbols(start_anchor_rows, start_anchor_seed))
+        start, score = correlate_near(rx, template, expected, radius)
+        nominal.append(anchor_nominal)
+        observed.append(start)
+        scores.append(score)
+        kinds.append(1.0)
+        indices.append(-1.0)
+
     template_samples = anchor_rows * L
     anchor_index = 0
     attempted_payload = []
     while True:
-        anchor_nominal = float((len(training) + interval + anchor_index * (interval + anchor_rows)) * L)
+        anchor_nominal = float(
+            (len(training) + start_anchor_rows + interval + anchor_index * (interval + anchor_rows)) * L
+        )
         expected = train_i + train_scale * anchor_nominal
         if expected - radius >= len(rx) - template_samples:
             break
@@ -553,6 +574,12 @@ def _anchor_channel(rows, known, current_h):
         phase = np.angle(np.sum(weight * np.conj(estimate) * current_h))
         aligned.append(estimate * np.exp(1j * phase))
     return np.mean(aligned, axis=0)
+
+
+def estimate_anchor_channel(rows, known, current_h):
+    if len(rows) != len(known):
+        raise ValueError("recording ends inside payload start anchor")
+    return _anchor_channel(rows, known, current_h)
 
 
 def payload_llrs_anchored(
@@ -672,4 +699,6 @@ def profile_meta():
         "timing_anchor_interval": TIMING_ANCHOR_INTERVAL,
         "timing_anchor_symbols": TIMING_ANCHOR_SYMBOLS,
         "timing_anchor_seed": TIMING_ANCHOR_SEED,
+        "payload_start_anchor_symbols": PAYLOAD_START_ANCHOR_SYMBOLS,
+        "payload_start_anchor_seed": PAYLOAD_START_ANCHOR_SEED,
     }
