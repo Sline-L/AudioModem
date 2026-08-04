@@ -1,0 +1,11 @@
+__pycache__/
+tests/__pycache__/
+data/tx/*
+!data/tx/.gitkeep
+data/rx/*
+!data/rx/.gitkeep
+run/*
+!run/.gitkeep
+profiles/*.json
+!profiles/step8_compatible.json
+!profiles/tui_v1_default.json
