@@ -5,9 +5,10 @@ N1 uses a single-file frame with two chirps and no payload pilots:
 ```text
 500 ms front chirp, 1k-9k
 30 ms silence guard
-8 training OFDM symbols
+6 front training OFDM symbols
 9 header OFDM symbols, 3 permuted copies x 3 symbols
 variable payload OFDM symbols
+optional 6 tail training OFDM symbols, enabled by --tail-training
 50 ms inter-frame gap
 500 ms tail chirp, 1k-9k
 ```
@@ -23,10 +24,12 @@ quality selects the final pair and SFO used for open-loop correction.
 Self-contained N1 modem implementation:
 
 - mono 16-bit 48 kHz WAV I/O;
-- OFDM with `N=8192`, `CP=2048`, symbol length `10240`;
-- active data band from 2 kHz to 7 kHz, bins `342..1194`;
+- OFDM with `N=4096`, `CP=2048`, symbol length `6144`;
+- active data band from 2 kHz to 7 kHz, bins `171..597`;
 - 500 ms linear chirp sync from 1 kHz to 9 kHz;
-- 8 known QPSK training OFDM symbols for channel estimation;
+- 6 known QPSK front training OFDM symbols for channel estimation;
+- optional 6-symbol tail training block after payload when `--tail-training` is enabled;
+- with `--tail-training`, RX assumes time-invariant `H` and averages all 12 front+tail training symbols for one global channel estimate;
 - fixed 9-symbol BPSK header: 3 permuted 64-byte header copies with bit-majority vote;
 - variable BPSK/QPSK/QAM16 payload with no pilot and no FEC;
 - dynamic profile metadata derived from the current `N`, `CP`, and band;
@@ -125,6 +128,14 @@ Any file:
 python tx_n1.py data/source/file15.txt --out data/n1/file15.wav
 ```
 
+Enable the front+tail training layout:
+
+```bash
+python tx_n1.py data/source/file16_test.txt \
+  --tail-training \
+  --out data/n1/n1_tail_training.wav
+```
+
 Important transmitter options:
 
 | Option | Default | Meaning / 含义 |
@@ -132,6 +143,7 @@ Important transmitter options:
 | `input` | `data/source/file16_test.txt` | source file / 源文件 |
 | `--mod` | `qpsk` | payload modulation: `bpsk`, `qpsk`, or `qam16` |
 | `--training-seed` | `3026` | deterministic training symbols |
+| `--tail-training` | off | insert the same 6-symbol training block after payload |
 | `--out` | `data/n1/n1.wav` | transmit WAV path |
 
 ## 3. Decode / 解码
@@ -152,12 +164,22 @@ python rx_n1.py data/rx/receive.wav \
   --out runs/n1/recording
 ```
 
+Decode a frame generated with tail training:
+
+```bash
+python rx_n1.py data/n1/n1_tail_training.wav \
+  --tail-training \
+  --source data/source/file16_test.txt \
+  --out runs/n1/tail_training
+```
+
 Important receiver options:
 
 | Option | Default | Meaning / 含义 |
 |---|---:|---|
 | `--source` | none | optional truth file for exact match reporting |
 | `--training-seed` | `3026` | must match transmitter |
+| `--tail-training` | off | expect 6 training OFDM symbols after payload and average front+tail training for `H` |
 | `--tail-search-seconds` | `0.5` | fallback search radius around expected tail chirp |
 | `--out` | `runs/n1` | output directory |
 
@@ -202,7 +224,8 @@ Expected metadata constants:
 ```text
 chirp_samples = 24000
 guard_samples = 1440
-training_symbols = 8
+training_symbols = 6
+tail_training_symbols = 0, or 6 with --tail-training
 header_symbols = 9
 header_copies = 3
 header_copy_symbols = 3

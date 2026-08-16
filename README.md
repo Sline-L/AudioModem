@@ -12,9 +12,10 @@ and variable-length payload as a no-pilot, no-FEC baseline.
 ```text
 500 ms front chirp, 1k-9k
 30 ms silence guard
-8 training OFDM symbols
+6 front training OFDM symbols
 9 header OFDM symbols, 3 permuted copies x 3 symbols
 variable payload OFDM symbols, determined by file length
+optional 6 tail training OFDM symbols, enabled by --tail-training
 50 ms inter-frame gap
 500 ms tail chirp, 1k-9k
 ```
@@ -22,21 +23,24 @@ variable payload OFDM symbols, determined by file length
 The OFDM data band remains:
 
 ```text
-48 kHz, N=8192, CP=2048
-active data band 2 kHz to 7 kHz, bins 342-1194
+48 kHz, N=4096, CP=2048
+active data band 2 kHz to 7 kHz, bins 171-597
 payload mod = bpsk, qpsk, or qam16
 ```
 
 The receiver enumerates front/tail chirp pairs, refines the OFDM start with the
-known eight-symbol training waveform, and shortlists the strongest joint
+known six-symbol front training waveform, and shortlists the strongest joint
 candidates. It then searches SFO within `+/-5 ppm` at `0.25 ppm` resolution
 around an in-range chirp estimate, or performs a `[-80, +80] ppm` coarse search
 first when needed. Training consistency and the three header copies jointly
 select the final pair and SFO before open-loop payload correction.
 
-接收端枚举首尾 chirp pair，用已知 8-symbol training 细化 OFDM 起点并筛选候选；
+接收端枚举首尾 chirp pair，用已知 6-symbol 前置 training 细化 OFDM 起点并筛选候选；
 随后在粗 ppm 附近以 0.25 ppm 精调，并结合 training 一致性和三份 header 的可靠度
 选择最终 pair/ppm。Header 使用三份 BPSK copy：原顺序、permutation A、permutation B。
+如果发送和接收同时加 `--tail-training`，payload 后会额外插入同一组 6-symbol
+training；接收端假设 `H` 不随时间变化，把前后两段共 12 个 training symbols
+一起全局平均来估计 `H[k]`。
 
 ## Quick Start / 快速开始
 

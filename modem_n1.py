@@ -21,7 +21,8 @@ ACTIVE_BINS = np.arange(
 
 CHIRP_SECONDS = 0.500
 CHIRP_GUARD_SECONDS = 0.030
-TRAINING_SYMBOLS = 6
+TRAINING_SYMBOLS = 12
+TAIL_TRAINING_SYMBOLS = TRAINING_SYMBOLS
 HEADER_SYMBOLS = 9
 HEADER_COPIES = 3
 HEADER_COPY_SYMBOLS = 3
@@ -375,18 +376,26 @@ def decode_payload(symbols, header):
     return body
 
 
-def frame_sample_counts(payload_rows):
+def frame_sample_counts(payload_rows, tail_training=False):
     training_samples = TRAINING_SYMBOLS * L
+    tail_training_samples = TAIL_TRAINING_SYMBOLS * L if tail_training else 0
     header_samples = HEADER_SYMBOLS * L
     payload_samples = int(payload_rows) * L
-    tail_start = CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + training_samples + header_samples + payload_samples + INTER_FRAME_GAP_SAMPLES
+    tail_training_start = CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + training_samples + header_samples + payload_samples
+    gap_start = tail_training_start + tail_training_samples
+    tail_start = gap_start + INTER_FRAME_GAP_SAMPLES
     total = tail_start + CHIRP_SAMPLES
     return {
         "chirp_samples": CHIRP_SAMPLES,
         "guard_samples": CHIRP_GUARD_SAMPLES,
         "training_samples": training_samples,
+        "tail_training_enabled": bool(tail_training),
+        "tail_training_symbols": TAIL_TRAINING_SYMBOLS if tail_training else 0,
+        "tail_training_samples": tail_training_samples,
         "header_samples": header_samples,
         "payload_samples": payload_samples,
+        "tail_training_start": tail_training_start if tail_training else None,
+        "gap_start": gap_start,
         "gap_samples": INTER_FRAME_GAP_SAMPLES,
         "tail_chirp_start": tail_start,
         "D_tx": tail_start,
@@ -394,7 +403,7 @@ def frame_sample_counts(payload_rows):
     }
 
 
-def profile_meta():
+def profile_meta(tail_training=False):
     band_start = int(round(BAND_HZ[0]))
     band_end = int(round(BAND_HZ[1]))
     return {
@@ -415,6 +424,8 @@ def profile_meta():
         "chirp_guard_seconds": CHIRP_GUARD_SECONDS,
         "chirp_guard_samples": CHIRP_GUARD_SAMPLES,
         "training_symbols": TRAINING_SYMBOLS,
+        "tail_training_enabled": bool(tail_training),
+        "tail_training_symbols": TAIL_TRAINING_SYMBOLS if tail_training else 0,
         "header_symbols": HEADER_SYMBOLS,
         "header_copies": HEADER_COPIES,
         "header_copy_symbols": HEADER_COPY_SYMBOLS,
