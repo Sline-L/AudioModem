@@ -33,13 +33,17 @@ Thumbs.db
 # Generated modem artifacts from local experiments
 data/tx/*
 data/rx/*
+data/simple_main/*
 runs/*
 data/step5_singlebin_sweep/*
 !data/tx/.gitkeep
 !data/rx/.gitkeep
+!data/simple_main/.gitkeep
 !runs/.gitkeep
 !data/step5_singlebin_sweep/.gitkeep
 
 # Large generated artifacts that exceed normal GitHub limits
 archive/tmp/
 archive/runs/
+archive/legacy/runs/
+archive/legacy/data/step5_singlebin_sweep/
