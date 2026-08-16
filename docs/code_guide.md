@@ -3,13 +3,13 @@
 N1 uses a single-file frame with two chirps and no payload pilots:
 
 ```text
-150 ms front chirp, 1k-9k
+500 ms front chirp, 1k-9k
 30 ms silence guard
 8 training OFDM symbols
 9 header OFDM symbols, 3 permuted copies x 3 symbols
 variable payload OFDM symbols
 50 ms inter-frame gap
-150 ms tail chirp, 1k-9k
+500 ms tail chirp, 1k-9k
 ```
 
 The tail chirp lets the receiver estimate sampling drift for one-shot file
@@ -25,7 +25,7 @@ Self-contained N1 modem implementation:
 - mono 16-bit 48 kHz WAV I/O;
 - OFDM with `N=4096`, `CP=2048`, symbol length `6144`;
 - active data band from 2 kHz to 7 kHz, bins `171..597`;
-- 150 ms linear chirp sync from 1 kHz to 9 kHz;
+- 500 ms linear chirp sync from 1 kHz to 9 kHz;
 - 8 known QPSK training OFDM symbols for channel estimation;
 - fixed 9-symbol BPSK header: 3 permuted 64-byte header copies with bit-majority vote;
 - variable BPSK/QPSK/QAM16 payload with no pilot and no FEC;
@@ -43,14 +43,14 @@ Reads one file and writes a transmit WAV plus deterministic sidecars:
 
 ### `rx_n1.py`
 
-Finds front/tail chirps, estimates payload symbol count and sampling drift,
-estimates `H` from training, decodes the permuted-copy header, then decodes the
-exact number of payload OFDM symbols from the header.
+Finds a valid front/tail chirp candidate pair, estimates payload symbol count
+and sampling drift, estimates `H` from training, decodes the permuted-copy
+header, then decodes the exact number of payload OFDM symbols from the header.
 
 Receiver data flow:
 
 ```text
-front chirp -> tail chirp -> estimate payload_symbols/SFO -> training H -> permuted header vote -> payload
+chirp candidates -> front/tail pair -> estimate payload_symbols/SFO -> training H -> permuted header vote -> payload
 ```
 
 Header copy mapping:
@@ -82,6 +82,15 @@ ber_header_vote_ber
 ber_payload_ber
 ber_overall_useful_ber
 ber_payload_byte_error_rate
+```
+
+The receiver stores both the raw chirp-derived SFO and the selected SFO from
+header search:
+
+```text
+chirp_sfo_ppm
+selected_sfo_ppm
+epsilon_search_scores
 ```
 
 ## 2. Generate / 生成发送音频
@@ -173,7 +182,7 @@ cmp data/source/file16_test.txt runs/n1/offline/file16_test.txt
 Expected metadata constants:
 
 ```text
-chirp_samples = 7200
+chirp_samples = 24000
 guard_samples = 1440
 training_symbols = 8
 header_symbols = 9

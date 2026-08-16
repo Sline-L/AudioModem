@@ -5,6 +5,7 @@ import json
 import zlib
 
 import numpy as np
+from scipy import signal
 
 from modem_n1 import (
     ACTIVE_BINS,
@@ -135,6 +136,9 @@ def decode_header_pass(rx, front_start, training, epsilon=0.0):
     except Exception as exc:
         exc.header_raw = header_raw
         exc.header_diag = diagnostics
+        exc.h = h
+        exc.training_error = training_error
+        exc.phase_fit = phase_fit
         raise
     return header, header_raw, h, training_error, phase_fit, header_start, diagnostics
 
@@ -148,6 +152,179 @@ def find_tail(rx, chirp, front_start, d_tx, search_seconds):
         return find_chirp(rx, chirp, start, end)
     except ValueError:
         return find_chirp(rx, chirp, int(round(front_start + CHIRP_SAMPLES)), None)
+
+
+def chirp_candidates(rx, chirp, max_peaks=24, min_spacing=None):
+    if min_spacing is None:
+        min_spacing = max(5000, len(chirp) // 2)
+    corr = signal.correlate(rx, chirp, mode="valid", method="fft")
+    energy = signal.fftconvolve(rx * rx, np.ones(len(chirp)), mode="valid")
+    denom = np.sqrt(np.maximum(energy, 0.0)) * np.linalg.norm(chirp)
+    score = np.divide(np.abs(corr), denom, out=np.zeros_like(denom), where=denom > 0)
+    selected = []
+    for index in np.argsort(score)[::-1]:
+        index = int(index)
+        if all(abs(index - other[0]) >= min_spacing for other in selected):
+            selected.append((index, float(np.clip(score[index], 0.0, 1.0))))
+        if len(selected) >= max_peaks:
+            break
+    return sorted(selected, key=lambda item: item[0])
+
+
+def find_chirp_pair(rx, chirp):
+    candidates = chirp_candidates(rx, chirp)
+    fixed_part = fixed_part_samples()
+    best = None
+    for front_index, (front_start, front_score) in enumerate(candidates):
+        for tail_start, tail_score in candidates[front_index + 1 :]:
+            d_rx = float(tail_start - front_start)
+            payload_symbols = int(round((d_rx - fixed_part) / L))
+            if payload_symbols < 0:
+                continue
+            counts = frame_sample_counts(payload_symbols)
+            d_tx = float(counts["D_tx"])
+            grid_error = abs(d_rx - d_tx)
+            epsilon = (d_rx - d_tx) / d_tx if d_tx else 0.0
+            if grid_error > 500:
+                continue
+            if abs(epsilon * 1e6) > 300:
+                continue
+            if front_start + d_tx + CHIRP_SAMPLES > len(rx):
+                continue
+            candidate = {
+                "front_start": float(front_start),
+                "front_score": float(front_score),
+                "tail_start": float(tail_start),
+                "tail_score": float(tail_score),
+                "payload_symbols": int(payload_symbols),
+                "counts": counts,
+                "D_rx": float(d_rx),
+                "D_tx": float(d_tx),
+                "epsilon": float(epsilon),
+                "grid_error": float(grid_error),
+                "candidates": candidates,
+            }
+            key = (-(front_score + tail_score), grid_error, front_start)
+            if best is None or key < best[0]:
+                best = (key, candidate)
+    if best:
+        return best[1]
+    front_start, front_score = find_chirp(rx, chirp)
+    return {
+        "front_start": float(front_start),
+        "front_score": float(front_score),
+        "tail_start": None,
+        "tail_score": 0.0,
+        "payload_symbols": None,
+        "counts": None,
+        "D_rx": None,
+        "D_tx": None,
+        "epsilon": 0.0,
+        "grid_error": None,
+        "candidates": candidates,
+    }
+
+
+def score_failed_header(header_diag):
+    disagreements = header_diag.get("bit_disagreements")
+    if disagreements is None:
+        disagreements = HEADER_COPIES * HEADER_SIZE * 8
+    copy_crc_ok = header_diag.get("copy_crc_ok", [])
+    crc_bonus = 1000 * sum(bool(value) for value in copy_crc_ok)
+    return float(disagreements - crc_bonus)
+
+
+def search_header_epsilon(rx, front_start, training, ppm_min=-80, ppm_max=80, ppm_step=5):
+    best = None
+    attempts = []
+    scores = []
+    for ppm in range(ppm_min, ppm_max + ppm_step, ppm_step):
+        epsilon = ppm * 1e-6
+        try:
+            result = decode_header_pass(rx, front_start, training, epsilon)
+            header, header_raw, h, training_error, phase_fit, header_start, header_diag = result
+            score = -10000.0 - 1000.0 * sum(bool(value) for value in header_diag["copy_crc_ok"])
+            attempt = {
+                "ppm": int(ppm),
+                "epsilon": float(epsilon),
+                "score": float(score),
+                "header_ok": True,
+                "header": header,
+                "header_raw": header_raw,
+                "h": h,
+                "training_error": training_error,
+                "phase_fit": phase_fit,
+                "header_start": header_start,
+                "header_diag": header_diag,
+            }
+            attempts.append(attempt)
+            scores.append(
+                {
+                    "ppm": int(ppm),
+                    "score": float(score),
+                    "header_ok": True,
+                    "bit_disagreements": int(header_diag["bit_disagreements"]),
+                    "copy_crc_ok": [bool(value) for value in header_diag["copy_crc_ok"]],
+                }
+            )
+            if best is None or (not best["header_ok"], abs(ppm), score) < (
+                not best["header_ok"],
+                abs(best["ppm"]),
+                best["score"],
+            ):
+                best = attempt
+        except Exception as exc:
+            header_diag = getattr(exc, "header_diag", {"copy_crc_ok": [], "bit_disagreements": None})
+            score = score_failed_header(header_diag)
+            attempt = {
+                "ppm": int(ppm),
+                "epsilon": float(epsilon),
+                "score": float(score),
+                "header_ok": False,
+                "header": None,
+                "header_raw": getattr(exc, "header_raw", b""),
+                "h": getattr(exc, "h", np.zeros(len(ACTIVE_BINS), complex)),
+                "training_error": getattr(exc, "training_error", np.full(len(ACTIVE_BINS), np.nan)),
+                "phase_fit": getattr(exc, "phase_fit", np.empty((0, 4))),
+                "header_start": None,
+                "header_diag": header_diag,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+            attempts.append(attempt)
+            scores.append(
+                {
+                    "ppm": int(ppm),
+                    "score": float(score),
+                    "header_ok": False,
+                    "bit_disagreements": header_diag.get("bit_disagreements"),
+                    "copy_crc_ok": [bool(value) for value in header_diag.get("copy_crc_ok", [])],
+                }
+            )
+            if best is None or (not best["header_ok"], score, abs(ppm)) < (
+                not best["header_ok"],
+                best["score"],
+                abs(best["ppm"]),
+            ):
+                best = attempt
+    if attempts and not any(attempt["header_ok"] for attempt in attempts):
+        min_score = min(attempt["score"] for attempt in attempts)
+        close = [attempt for attempt in attempts if attempt["score"] <= min_score + 2.0]
+        best = min(close, key=lambda attempt: (abs(attempt["ppm"] + 10), abs(attempt["ppm"])))
+    return best, scores
+
+
+def refine_tail_from_epsilon(rx, chirp, front_start, d_tx, epsilon, radius_samples=20):
+    if d_tx is None:
+        return None, 0.0, None
+    expected = float(front_start + d_tx * (1.0 + epsilon))
+    start = max(0, int(round(expected - radius_samples)))
+    end = min(len(rx), int(round(expected + radius_samples + len(chirp))))
+    try:
+        tail_start, tail_score = find_chirp(rx, chirp, start, end)
+    except ValueError:
+        return None, 0.0, None
+    refined_epsilon = ((tail_start - front_start) - d_tx) / d_tx if d_tx else None
+    return tail_start, tail_score, refined_epsilon
 
 
 def fixed_part_samples():
@@ -291,22 +468,33 @@ def ber_diagnostics(rx, front_start, training, epsilon, source, payload_rows, he
 
 def run_one(receive, out, a, training, chirp):
     rx = read_wav(receive)
-    front_start, front_score = find_chirp(rx, chirp)
+    sync = find_chirp_pair(rx, chirp)
+    front_start = sync["front_start"]
+    front_score = sync["front_score"]
 
     header = None
     header_raw = b""
     h = np.zeros(len(ACTIVE_BINS), complex)
     training_error = np.full(len(ACTIVE_BINS), np.nan)
     phase_fit = np.empty((0, 4))
-    tail_start = None
-    tail_score = 0.0
-    d_tx = None
-    d_rx = None
+    tail_start = sync["tail_start"]
+    tail_score = sync["tail_score"]
+    d_tx = sync["D_tx"]
+    d_rx = sync["D_rx"]
+    chirp_epsilon = sync["epsilon"]
     epsilon = 0.0
-    payload_symbols_guess = None
-    payload_symbols_from_tail = None
+    payload_symbols_guess = sync["payload_symbols"]
+    payload_symbols_from_tail = sync["payload_symbols"] if sync["tail_start"] is not None else None
     payload_symbols_header_match = None
-    tail_search_mode = ""
+    sync_mode = "pair_sync" if sync["tail_start"] is not None else "sync_fallback"
+    tail_search_mode = sync_mode
+    sync_grid_error = sync["grid_error"]
+    sync_candidates = sync["candidates"]
+    epsilon_search_scores = []
+    selected_sfo_source = "header_search"
+    refined_tail_start = None
+    refined_tail_score = 0.0
+    refined_chirp_epsilon = None
     fixed_part = fixed_part_samples()
     header_ok = False
     header_diag = {
@@ -317,7 +505,9 @@ def run_one(receive, out, a, training, chirp):
     error = ""
 
     try:
-        try:
+        if sync_mode == "pair_sync":
+            counts = sync["counts"]
+        else:
             (
                 payload_symbols_guess,
                 counts,
@@ -325,34 +515,65 @@ def run_one(receive, out, a, training, chirp):
                 tail_score,
                 d_rx,
                 d_tx,
-                epsilon,
+                chirp_epsilon,
             ) = estimate_payload_from_tail(rx, chirp, front_start)
             payload_symbols_from_tail = payload_symbols_guess
-            tail_search_mode = "sync_first"
-        except Exception:
-            header, header_raw, h, training_error, phase_fit, _, header_diag = decode_header_pass(
-                rx, front_start, training
-            )
+            tail_search_mode = "sync_fallback"
+
+        selected, epsilon_search_scores = search_header_epsilon(rx, front_start, training)
+        epsilon = selected["epsilon"]
+        header = selected["header"]
+        header_raw = selected["header_raw"]
+        h = selected["h"]
+        training_error = selected["training_error"]
+        phase_fit = selected["phase_fit"]
+        header_diag = selected["header_diag"]
+        header_ok = bool(selected["header_ok"])
+        error = "" if header_ok else selected.get("error", "ValueError: header CRC mismatch")
+        if header_ok:
+            payload_symbols_header_match = payload_symbols_guess == header["payload_symbols"]
             counts = frame_sample_counts(header["payload_symbols"])
             d_tx = float(counts["D_tx"])
-            tail_start, tail_score = find_tail(rx, chirp, front_start, d_tx, a.tail_search_seconds)
-            d_rx = float(tail_start - front_start)
-            epsilon = (d_rx - d_tx) / d_tx if d_tx else 0.0
-            payload_symbols_guess = header["payload_symbols"]
-            payload_symbols_from_tail = None
-            tail_search_mode = "header_fallback"
-
-        header, header_raw, h, training_error, phase_fit, _, header_diag = decode_header_pass(
-            rx, front_start, training, epsilon
+        refined_tail_start, refined_tail_score, refined_chirp_epsilon = refine_tail_from_epsilon(
+            rx, chirp, front_start, d_tx, epsilon
         )
-        payload_symbols_header_match = payload_symbols_guess == header["payload_symbols"]
-        counts = frame_sample_counts(header["payload_symbols"])
-        header_ok = True
     except Exception as exc:
-        header_raw = getattr(exc, "header_raw", header_raw)
-        header_diag = getattr(exc, "header_diag", header_diag)
-        error = f"{type(exc).__name__}: {exc}"
-        counts = frame_sample_counts(header["payload_symbols"] if header else 0)
+        try:
+            if sync_mode != "pair_sync":
+                header, header_raw, h, training_error, phase_fit, _, header_diag = decode_header_pass(
+                    rx, front_start, training
+                )
+                counts = frame_sample_counts(header["payload_symbols"])
+                d_tx = float(counts["D_tx"])
+                tail_start, tail_score = find_tail(rx, chirp, front_start, d_tx, a.tail_search_seconds)
+                d_rx = float(tail_start - front_start)
+                chirp_epsilon = (d_rx - d_tx) / d_tx if d_tx else 0.0
+                payload_symbols_guess = header["payload_symbols"]
+                payload_symbols_from_tail = None
+                tail_search_mode = "header_fallback"
+                selected, epsilon_search_scores = search_header_epsilon(rx, front_start, training)
+                epsilon = selected["epsilon"]
+                header = selected["header"]
+                header_raw = selected["header_raw"]
+                h = selected["h"]
+                training_error = selected["training_error"]
+                phase_fit = selected["phase_fit"]
+                header_diag = selected["header_diag"]
+                header_ok = bool(selected["header_ok"])
+                error = "" if header_ok else selected.get("error", "ValueError: header CRC mismatch")
+                if header_ok:
+                    payload_symbols_header_match = payload_symbols_guess == header["payload_symbols"]
+                    counts = frame_sample_counts(header["payload_symbols"])
+                refined_tail_start, refined_tail_score, refined_chirp_epsilon = refine_tail_from_epsilon(
+                    rx, chirp, front_start, d_tx, epsilon
+                )
+            else:
+                raise exc
+        except Exception as fallback_exc:
+            header_raw = getattr(fallback_exc, "header_raw", header_raw)
+            header_diag = getattr(fallback_exc, "header_diag", header_diag)
+            error = f"{type(fallback_exc).__name__}: {fallback_exc}"
+            counts = frame_sample_counts(header["payload_symbols"] if header else 0)
 
     out.mkdir(parents=True, exist_ok=True)
     (out / "decoded_header.bin").write_bytes(header_raw)
@@ -421,13 +642,32 @@ def run_one(receive, out, a, training, chirp):
         "tail_chirp_score": float(tail_score),
         "D_tx": d_tx,
         "D_rx": d_rx,
+        "chirp_sfo_epsilon": float(chirp_epsilon),
+        "chirp_sfo_ppm": float(chirp_epsilon * 1e6),
         "sfo_epsilon": float(epsilon),
         "sfo_ppm": float(epsilon * 1e6),
+        "selected_sfo_epsilon": float(epsilon),
+        "selected_sfo_ppm": float(epsilon * 1e6),
+        "selected_sfo_source": selected_sfo_source,
+        "epsilon_search_ppm": int(round(epsilon * 1e6)),
+        "epsilon_search_scores": epsilon_search_scores,
+        "refined_tail_chirp_start": float(refined_tail_start) if refined_tail_start is not None else None,
+        "refined_tail_chirp_score": float(refined_tail_score),
+        "refined_chirp_sfo_epsilon": float(refined_chirp_epsilon) if refined_chirp_epsilon is not None else None,
+        "refined_chirp_sfo_ppm": float(refined_chirp_epsilon * 1e6) if refined_chirp_epsilon is not None else None,
         "fixed_part_samples": int(fixed_part),
         "payload_symbols_guess": int(payload_symbols_guess) if payload_symbols_guess is not None else None,
         "payload_symbols_from_tail": int(payload_symbols_from_tail) if payload_symbols_from_tail is not None else None,
         "payload_symbols_header_match": payload_symbols_header_match,
         "tail_search_mode": tail_search_mode,
+        "sync_mode": sync_mode,
+        "sync_grid_error_samples": float(sync_grid_error) if sync_grid_error is not None else None,
+        "sync_front_score": float(front_score),
+        "sync_tail_score": float(tail_score),
+        "sync_candidates": [
+            {"start": int(start), "score": float(score)}
+            for start, score in sync_candidates
+        ],
         "training_start": int(round(front_start + CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES)),
         "payload_ofdm_symbols_received": int(payload_count),
         "header_ok": bool(header_ok),

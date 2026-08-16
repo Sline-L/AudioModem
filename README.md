@@ -10,13 +10,13 @@ and variable-length payload as a no-pilot, no-FEC baseline.
 ## Current Pipeline / 当前主线
 
 ```text
-150 ms front chirp, 1k-9k
+500 ms front chirp, 1k-9k
 30 ms silence guard
 8 training OFDM symbols
 9 header OFDM symbols, 3 permuted copies x 3 symbols
 variable payload OFDM symbols, determined by file length
 50 ms inter-frame gap
-150 ms tail chirp, 1k-9k
+500 ms tail chirp, 1k-9k
 ```
 
 The OFDM data band remains:
@@ -27,14 +27,14 @@ active data band 2 kHz to 7 kHz, bins 171-597
 payload mod = bpsk, qpsk, or qam16
 ```
 
-The receiver uses the front/tail chirps to estimate payload OFDM symbol count
-and sampling drift before decoding the header, then applies open-loop linear
-phase correction to training, header and payload symbols. The header uses three
-BPSK copies: identity, permutation A, and permutation B.
+The receiver pairs front/tail chirp candidates to estimate payload OFDM symbol
+count and sampling drift before decoding the header, then applies open-loop
+linear phase correction to training, header and payload symbols. The header uses
+three BPSK copies: identity, permutation A, and permutation B.
 
-接收端先利用首尾 chirp 估计 payload OFDM symbol 数和采样漂移，再解 header，并对
-training、header、payload 做开环线性相位修正。Header 使用三份 BPSK copy：原顺序、
-permutation A、permutation B。
+接收端先配对首尾 chirp 候选峰，估计 payload OFDM symbol 数和采样漂移，再解 header，
+并对 training、header、payload 做开环线性相位修正。Header 使用三份 BPSK copy：
+原顺序、permutation A、permutation B。
 
 ## Quick Start / 快速开始
 
