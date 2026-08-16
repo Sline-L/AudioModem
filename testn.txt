@@ -1,7 +1,7 @@
 Step 1: Change N/Change distance
 Step 2: run commend
-python tx_n1.py data/source/file16_test.txt --tail-training --ldpc --out data/n2_3_ldpc_rate/rate1_2.wav
+python tx_n2.py data/source/file16_test.txt --ldpc --tail-training --out data/n2_3_ldpc_z27_rate/rate1_2.wav
 Step 3: record audio
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n2_3_ldpc_rate/rec_r1_2_10dm_1.wav
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n2_3_ldpc_z27_rate/rec_r1_2_10dm_1.wav
 Step 4: run commend
-python rx_n1.py data/n2_3_ldpc_rate/rec_r1_2_10dm_1.wav --source data/source/file16_test.txt --ldpc --tail-training --out runs/n2_3_ldpc_rate/rec_r1_2_10dm_1
+python rx_n2.py data/n2_3_ldpc_z27_rate/rec_r1_2_10dm_1.wav --source data/source/file16_test.txt --ldpc --tail-training --out runs/n2_3_ldpc_z27_rate/rec_r1_2_10dm_1
