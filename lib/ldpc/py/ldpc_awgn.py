@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-import ldpc
+import lib.ldpc.py.ldpc as ldpc
 
 sim_param = [
     ("802.16","1/2",3,"A"),

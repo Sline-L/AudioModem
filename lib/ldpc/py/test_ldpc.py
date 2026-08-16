@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import ldpc
+import lib.ldpc.py.ldpc as ldpc
 
 @pytest.mark.parametrize("standard,rate,z,ptype", [
     ("802.16","1/2",3,"A"),

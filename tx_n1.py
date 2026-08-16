@@ -6,29 +6,32 @@ import numpy as np
 
 from modem_n1 import (
     ACTIVE_BINS,
+    CHIRP_GUARD_SAMPLES,
+    CHIRP_SAMPLES,
     FS,
+    HEADER_SYMBOLS,
+    INTER_FRAME_GAP_SAMPLES,
     L,
     MODS,
+    TRAINING_SYMBOLS,
     bits_per_symbol,
-    file_symbols,
+    chirp_wave,
+    frame_sample_counts,
+    header_symbols,
     ofdm_tx,
+    payload_symbols,
     profile_meta,
-    random_qpsk,
+    training_symbols,
     wav_gain,
     write_wav,
 )
 
 
 def args():
-    p = argparse.ArgumentParser(description="make a n1 sync + preamble + data WAV")
+    p = argparse.ArgumentParser(description="make an N1 chirp/training/header/payload/tail-chirp WAV")
     p.add_argument("input", nargs="?", type=Path, default=Path("data/source/file16_test.txt"))
-    p.add_argument("--noise-seconds", type=float, default=0.5)
-    p.add_argument("--sync-symbols", type=int, default=16)
-    p.add_argument("--sync-seed", type=int, default=2026)
-    p.add_argument("--preamble-symbols", type=int, default=64)
-    p.add_argument("--preamble-seed", type=int, default=3026)
     p.add_argument("--mod", choices=MODS, default="qpsk")
-    p.add_argument("--tail-seconds", type=float, default=0.25)
+    p.add_argument("--training-seed", type=int, default=3026)
     p.add_argument("--out", type=Path, default=Path("data/n1/n1.wav"))
     return p.parse_args()
 
@@ -36,56 +39,51 @@ def args():
 def validate(a):
     if not a.input.exists():
         raise SystemExit(f"input file does not exist: {a.input}")
-    for name in ("sync_symbols", "preamble_symbols"):
-        if getattr(a, name) < 1:
-            raise SystemExit(f"--{name.replace('_', '-')} must be >= 1")
-    if a.noise_seconds < 0 or a.tail_seconds < 0:
-        raise SystemExit("silence durations must be non-negative")
 
 
 def main():
     a = args()
     validate(a)
 
-    sync = random_qpsk(a.sync_symbols, seed=a.sync_seed)
-    preamble = random_qpsk(a.preamble_symbols, seed=a.preamble_seed)
-    payload, payload_data_symbols = file_symbols(a.input, a.mod)
+    chirp = chirp_wave()
+    guard = np.zeros(CHIRP_GUARD_SAMPLES)
+    gap = np.zeros(INTER_FRAME_GAP_SAMPLES)
+    training = training_symbols(a.training_seed)
+    payload, payload_mod_symbols = payload_symbols(a.input, a.mod)
+    header = header_symbols(a.input, a.mod, len(payload), payload_mod_symbols)
 
-    noise_samples = int(round(a.noise_seconds * FS))
-    tail_samples = int(round(a.tail_seconds * FS))
-    sync_wave = ofdm_tx(sync)
-    preamble_wave = ofdm_tx(preamble)
+    training_wave = ofdm_tx(training)
+    header_wave = ofdm_tx(header)
     payload_wave = ofdm_tx(payload)
-    raw = np.r_[np.zeros(noise_samples), sync_wave, preamble_wave, payload_wave, np.zeros(tail_samples)]
+    raw = np.r_[chirp, guard, training_wave, header_wave, payload_wave, gap, chirp]
     gain = wav_gain(raw)
     write_wav(a.out, raw)
 
-    np.save(a.out.with_suffix(".sync.npy"), sync)
-    np.save(a.out.with_suffix(".preamble.npy"), preamble)
+    counts = frame_sample_counts(len(payload))
+    np.save(a.out.with_suffix(".training.npy"), training)
+    np.save(a.out.with_suffix(".header.npy"), header)
     meta = {
         "input": str(a.input),
         "out": str(a.out),
         "input_bytes": int(a.input.stat().st_size),
-        "noise_seconds": float(a.noise_seconds),
-        "noise_samples": int(noise_samples),
-        "sync_symbols": int(a.sync_symbols),
-        "sync_seed": int(a.sync_seed),
-        "preamble_symbols": int(a.preamble_symbols),
-        "preamble_seed": int(a.preamble_seed),
         "mod": a.mod,
         "bits_per_symbol": int(bits_per_symbol(a.mod)),
-        "payload_data_symbols": int(payload_data_symbols),
-        "payload_ofdm_symbols": int(len(payload)),
-        "tail_seconds": float(a.tail_seconds),
-        "tail_samples": int(tail_samples),
+        "payload_mod_symbols": int(payload_mod_symbols),
+        "payload_symbols": int(len(payload)),
         "gain": float(gain),
-        "sync_start_sample": int(noise_samples),
-        "preamble_start_sample": int(noise_samples + len(sync_wave)),
-        "payload_start_sample": int(noise_samples + len(sync_wave) + len(preamble_wave)),
+        "front_chirp_start_sample": 0,
+        "guard_start_sample": int(CHIRP_SAMPLES),
+        "training_start_sample": int(CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES),
+        "header_start_sample": int(CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + TRAINING_SYMBOLS * L),
+        "payload_start_sample": int(CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + (TRAINING_SYMBOLS + HEADER_SYMBOLS) * L),
+        "gap_start_sample": int(CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + (TRAINING_SYMBOLS + HEADER_SYMBOLS + len(payload)) * L),
+        "tail_chirp_start_sample": int(counts["tail_chirp_start"]),
+        "D_tx": int(counts["D_tx"]),
         "total_samples": int(len(raw)),
         "seconds": float(len(raw) / FS),
     }
     meta.update(profile_meta())
+    meta.update(counts)
     a.out.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     print(
@@ -93,10 +91,11 @@ def main():
         f"active_bins={len(ACTIVE_BINS)} symbol_len={L}"
     )
     print(
-        f"structure=silence {a.noise_seconds:.3f}s + sync {len(sync)} + "
-        f"preamble {len(preamble)} + data {len(payload)} + tail {a.tail_seconds:.3f}s"
+        f"structure=chirp {CHIRP_SAMPLES} + guard {CHIRP_GUARD_SAMPLES} + "
+        f"training {TRAINING_SYMBOLS} + header {HEADER_SYMBOLS} + "
+        f"payload {len(payload)} + gap {INTER_FRAME_GAP_SAMPLES} + chirp {CHIRP_SAMPLES}"
     )
-    print(f"band={meta['bin_start_hz']:.1f}-{meta['bin_end_hz']:.1f}Hz bins={meta['bin_start']}-{meta['bin_end']}")
+    print(f"D_tx={counts['D_tx']} tail_chirp_start={counts['tail_chirp_start']}")
     print(f"wrote {a.out.with_suffix('.meta.json')}")
 
 

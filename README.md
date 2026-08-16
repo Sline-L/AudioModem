@@ -1,26 +1,36 @@
 # AudioModem
 
 AudioModem 是一个面向真实声学信道实验的 OFDM 文件传输项目。当前 `n1`
-版本刻意回到最小协议，用来重新建立稳定基线。
+版本使用首尾 chirp、固定 training/header 和变长 payload，作为无 pilot、无 FEC 的新基线。
 
 AudioModem is an OFDM file-transfer project for real acoustic-channel tests.
-The current n1 version is intentionally minimal so experiments can
-restart from a clean baseline.
+The current n1 version uses front/tail chirps, fixed training/header symbols,
+and variable-length payload as a no-pilot, no-FEC baseline.
 
 ## Current Pipeline / 当前主线
 
 ```text
-48 kHz, N=4096, CP=2048
-active band 2 kHz to 7 kHz, bins 171-597
-frame = leading silence + sync + preamble + data + trailing silence
-payload mod = bpsk, qpsk, or qam16
-file header = filename + byte length + whole-file CRC32
+150 ms front chirp, 1k-9k
+30 ms silence guard
+8 training OFDM symbols
+9 header OFDM symbols, 3 repeated copies x 3 symbols
+variable payload OFDM symbols, determined by file length
+50 ms inter-frame gap
+150 ms tail chirp, 1k-9k
 ```
 
-This branch does not use error-correction code, comb pilots, start anchors,
-periodic anchors, or anchor-based sample-clock fitting.
+The OFDM data band remains:
 
-本分支不使用纠错码、comb pilot、start anchor、周期 anchor 或基于 anchor 的采样时钟拟合。
+```text
+48 kHz, N=4096, CP=2048
+active data band 2 kHz to 7 kHz, bins 171-597
+payload mod = bpsk, qpsk, or qam16
+```
+
+The receiver uses the two chirps to estimate sampling drift, then applies
+open-loop linear phase correction to training, header and payload symbols.
+
+接收端利用首尾 chirp 估计采样漂移，并对 training、header、payload 做开环线性相位修正。
 
 ## Quick Start / 快速开始
 
@@ -35,9 +45,9 @@ cmp data/source/file16_test.txt runs/n1/offline/file16_test.txt
 
 ## Layout / 目录
 
-- `modem_n1.py`: n1 WAV I/O, OFDM, modulation, packing and sync helpers.
-- `tx_n1.py`: transmitter CLI for `silence + sync + preamble + data`.
-- `rx_n1.py`: receiver CLI with sync, one preamble H estimate and direct demodulation.
+- `modem_n1.py`: N1 WAV I/O, chirp sync, OFDM, header, modulation and phase helpers.
+- `tx_n1.py`: transmitter CLI for the chirp/training/header/payload/tail-chirp frame.
+- `rx_n1.py`: receiver CLI with chirp SFO estimate, channel estimate and file recovery.
 - `data/source/`: source payload files.
 - `data/n1/`: generated transmit WAVs and sidecars, ignored by Git.
 - `runs/n1/`: generated receive/analysis outputs, ignored by Git.

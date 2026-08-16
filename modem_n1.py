@@ -20,11 +20,26 @@ ACTIVE_BINS = np.arange(
     dtype=int,
 )
 
+CHIRP_SECONDS = 0.150
+CHIRP_GUARD_SECONDS = 0.030
+TRAINING_SYMBOLS = 8
+HEADER_SYMBOLS = 9
+HEADER_COPIES = 3
+HEADER_COPY_SYMBOLS = 3
+INTER_FRAME_GAP_SECONDS = 0.050
+CHIRP_BAND_HZ = (1000.0, 9000.0)
+CHIRP_SAMPLES = int(round(CHIRP_SECONDS * FS))
+CHIRP_GUARD_SAMPLES = int(round(CHIRP_GUARD_SECONDS * FS))
+INTER_FRAME_GAP_SAMPLES = int(round(INTER_FRAME_GAP_SECONDS * FS))
+
 MODS = ("bpsk", "qpsk", "qam16")
-MAGIC = b"AMS0"
+MOD_IDS = {name: index for index, name in enumerate(MODS)}
+MAGIC = b"AMN1"
 VERSION = 1
-HEADER_BODY = struct.Struct(">4sBBHQI120s")
+MAX_NAME_BYTES = 38
+HEADER_BODY = struct.Struct(">4sBBBBIIHI38s")
 HEADER_SIZE = HEADER_BODY.size + 4
+HEADER_MOD = "bpsk"
 
 
 def read_wav(path):
@@ -116,54 +131,157 @@ def bytes_from_mod(symbols, mod="qpsk"):
     return bytes_from_bits(bits)
 
 
-def pack_file(path):
+def symbols_from_bytes(data, mod="qpsk", rows=None, bins=ACTIVE_BINS):
+    symbols = mod_symbols(data, mod)
+    needed_rows = int(np.ceil(len(symbols) / len(bins)))
+    if rows is None:
+        rows = needed_rows
+    if needed_rows > rows:
+        raise ValueError(f"{len(data)} bytes need {needed_rows} OFDM rows, only {rows} available")
+    padded = np.zeros(rows * len(bins), complex)
+    padded[: len(symbols)] = symbols
+    return padded.reshape(rows, len(bins)), len(symbols)
+
+
+def payload_symbols(path, mod="qpsk", bins=ACTIVE_BINS):
+    return symbols_from_bytes(Path(path).read_bytes(), mod, bins=bins)
+
+
+def header_bytes(path, mod, payload_rows, payload_mod_symbols):
     path = Path(path)
     body = path.read_bytes()
     name = path.name.encode("utf-8")
-    if len(name) > 120:
-        raise ValueError("UTF-8 filename must be at most 120 bytes")
+    if len(name) > MAX_NAME_BYTES:
+        raise ValueError(f"UTF-8 filename must be at most {MAX_NAME_BYTES} bytes")
+    if len(body) > 0xFFFFFFFF:
+        raise ValueError("N1 header supports files up to 2^32-1 bytes")
+    if payload_rows > 0xFFFF:
+        raise ValueError("N1 header supports up to 65535 payload OFDM symbols")
     first = HEADER_BODY.pack(
         MAGIC,
         VERSION,
         len(name),
+        MOD_IDS[mod],
         0,
         len(body),
+        int(payload_rows),
+        payload_mod_symbols,
         zlib.crc32(body),
-        name.ljust(120, b"\0"),
+        name.ljust(MAX_NAME_BYTES, b"\0"),
     )
-    return first + struct.pack(">I", zlib.crc32(first)) + body
+    return first + struct.pack(">I", zlib.crc32(first))
 
 
-def unpack_file(data):
-    if len(data) < HEADER_SIZE:
-        raise ValueError("payload is shorter than header")
-    first = data[: HEADER_BODY.size]
-    stored_header_crc = struct.unpack(">I", data[HEADER_BODY.size:HEADER_SIZE])[0]
-    if zlib.crc32(first) != stored_header_crc:
+def header_symbols(path, mod, payload_rows, payload_mod_symbols):
+    copy = symbols_from_bytes(
+        header_bytes(path, mod, payload_rows, payload_mod_symbols),
+        HEADER_MOD,
+        rows=HEADER_COPY_SYMBOLS,
+    )[0]
+    return np.vstack([copy] * HEADER_COPIES)
+
+
+def parse_header(raw):
+    if len(raw) < HEADER_SIZE:
+        raise ValueError("header is shorter than N1 header")
+    first = raw[: HEADER_BODY.size]
+    stored_crc = struct.unpack(">I", raw[HEADER_BODY.size:HEADER_SIZE])[0]
+    if zlib.crc32(first) != stored_crc:
         raise ValueError("header CRC mismatch")
-    magic, version, name_len, _, size, file_crc, raw_name = HEADER_BODY.unpack(first)
-    if magic != MAGIC or version != VERSION or name_len > len(raw_name):
-        raise ValueError("unsupported n1 header")
-    body = data[HEADER_SIZE : HEADER_SIZE + size]
-    if len(body) != size:
-        raise ValueError("recording ended before full payload")
-    if zlib.crc32(body) != file_crc:
-        raise ValueError("file CRC mismatch")
-    return Path(raw_name[:name_len].decode("utf-8")).name, body
+    magic, version, name_len, mod_id, _, size, payload_rows, payload_mod_symbols, file_crc, raw_name = HEADER_BODY.unpack(first)
+    if magic != MAGIC or version != VERSION:
+        raise ValueError("unsupported N1 header")
+    if name_len > len(raw_name) or mod_id >= len(MODS):
+        raise ValueError("invalid N1 header fields")
+    return {
+        "name": Path(raw_name[:name_len].decode("utf-8")).name,
+        "mod": MODS[mod_id],
+        "file_size": int(size),
+        "payload_symbols": int(payload_rows),
+        "payload_mod_symbols": int(payload_mod_symbols),
+        "file_crc32": int(file_crc),
+    }
 
 
-def file_symbols(path, mod="qpsk", bins=ACTIVE_BINS):
-    symbols = mod_symbols(pack_file(path), mod)
-    rows = int(np.ceil(len(symbols) / len(bins)))
-    padded = np.zeros(rows * len(bins), complex)
-    padded[: len(symbols)] = symbols
-    return padded.reshape(rows, len(bins)), len(symbols)
+def header_copy_bytes(equalized_symbols):
+    copies = np.asarray(equalized_symbols).reshape(HEADER_COPIES, HEADER_COPY_SYMBOLS, len(ACTIVE_BINS))
+    raw_copies = []
+    bit_copies = []
+    crc_ok = []
+    for copy in copies:
+        raw = bytes_from_mod(copy.ravel(), HEADER_MOD)[:HEADER_SIZE]
+        raw_copies.append(raw)
+        bit_copies.append(bits_from_bytes(raw)[: HEADER_SIZE * 8])
+        try:
+            parse_header(raw)
+            crc_ok.append(True)
+        except ValueError:
+            crc_ok.append(False)
+    return raw_copies, np.asarray(bit_copies, dtype=np.uint8), crc_ok
+
+
+def vote_header(equalized_symbols):
+    raw_copies, bit_copies, crc_ok = header_copy_bytes(equalized_symbols)
+    votes = np.sum(bit_copies, axis=0)
+    voted_bits = (votes >= 2).astype(np.uint8)
+    voted = bytes_from_bits(voted_bits)[:HEADER_SIZE]
+    disagreements = int(np.count_nonzero((votes != 0) & (votes != HEADER_COPIES)))
+    return {
+        "raw": voted,
+        "header": parse_header(voted),
+        "raw_copies": raw_copies,
+        "copy_crc_ok": crc_ok,
+        "bit_disagreements": disagreements,
+    }
 
 
 def random_qpsk(rows, bins=ACTIVE_BINS, seed=2026):
     rng = np.random.default_rng(seed)
     bits = rng.integers(0, 2, (rows, len(bins), 2), dtype=np.uint8)
     return (np.where(bits[:, :, 1], -1.0, 1.0) + 1j * np.where(bits[:, :, 0], -1.0, 1.0)) / np.sqrt(2)
+
+
+def training_symbols(seed=3026):
+    return random_qpsk(TRAINING_SYMBOLS, seed=seed)
+
+
+def chirp_wave():
+    t = np.arange(CHIRP_SAMPLES) / FS
+    wave_data = signal.chirp(
+        t,
+        f0=CHIRP_BAND_HZ[0],
+        f1=CHIRP_BAND_HZ[1],
+        t1=CHIRP_SECONDS,
+        method="linear",
+    )
+    fade = min(int(round(0.005 * FS)), CHIRP_SAMPLES // 2)
+    if fade:
+        edge = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
+        wave_data[:fade] *= edge
+        wave_data[-fade:] *= edge[::-1]
+    return wave_data.astype(float)
+
+
+def find_chirp(rx, template, start=0, end=None):
+    if end is None:
+        end = len(rx)
+    start = max(0, int(start))
+    end = min(len(rx), int(end))
+    if end - start < len(template):
+        raise ValueError("search window is shorter than chirp template")
+    section = rx[start:end]
+    corr = signal.correlate(section, template, mode="valid", method="fft")
+    energy = signal.fftconvolve(section * section, np.ones(len(template)), mode="valid")
+    denom = np.sqrt(np.maximum(energy, 0.0)) * np.linalg.norm(template)
+    score = np.divide(np.abs(corr), denom, out=np.zeros_like(denom), where=denom > 0)
+    peak = int(np.argmax(score))
+    delta = 0.0
+    if 0 < peak < len(score) - 1:
+        left, middle, right = score[peak - 1 : peak + 2]
+        curvature = left - 2.0 * middle + right
+        if abs(curvature) > 1e-12:
+            delta = float(np.clip(0.5 * (left - right) / curvature, -0.5, 0.5))
+    return float(start + peak + delta), float(np.clip(score[peak], 0.0, 1.0))
 
 
 def ofdm_tx(symbols, bins=ACTIVE_BINS):
@@ -182,19 +300,18 @@ def ofdm_rx(samples, bins=ACTIVE_BINS):
     return np.fft.fft(time, axis=1)[:, bins]
 
 
-def find_sync(rx, template):
-    if len(rx) < len(template):
-        raise ValueError("receive wav is shorter than sync template")
-    corr = signal.correlate(rx, template, mode="valid", method="fft")
-    peak = int(np.argmax(np.abs(corr)))
-    energy = np.linalg.norm(rx[peak : peak + len(template)]) * np.linalg.norm(template)
-    return peak, float(abs(corr[peak]) / energy) if energy else 0.0
+def phase_correct(symbols, symbol_starts, reference_start, epsilon, bins=ACTIVE_BINS):
+    symbols = np.asarray(symbols, dtype=complex)
+    symbol_starts = np.asarray(symbol_starts, dtype=float)
+    drift = epsilon * (symbol_starts - reference_start)
+    ramp = np.exp(2j * np.pi * drift[:, None] * bins[None, :] / N)
+    return symbols * ramp
 
 
 def estimate_channel(received, known):
     rows = min(len(received), len(known))
     if rows == 0:
-        raise ValueError("no preamble symbols available for channel estimate")
+        raise ValueError("no training symbols available for channel estimate")
     return np.mean(received[:rows] / known[:rows], axis=0)
 
 
@@ -202,9 +319,52 @@ def equalize(received, h):
     return received / np.where(np.abs(h) > 1e-12, h, 1.0)
 
 
+def training_phase_fit(received, known, h, bins=ACTIVE_BINS):
+    rows = min(len(received), len(known))
+    x = bins.astype(float)
+    fits = []
+    for row, ref in zip(received[:rows], known[:rows]):
+        error = row / np.where(np.abs(h * ref) > 1e-12, h * ref, 1.0)
+        phase = np.unwrap(np.angle(error))
+        slope, intercept = np.polyfit(x, phase, 1)
+        residual = phase - (slope * x + intercept)
+        delta_n = -slope * N / (2.0 * np.pi)
+        fits.append([intercept, slope, delta_n, float(np.sqrt(np.mean(residual * residual)))])
+    return np.asarray(fits)
+
+
+def decode_payload(symbols, header):
+    raw = bytes_from_mod(symbols.ravel()[: header["payload_mod_symbols"]], header["mod"])
+    body = raw[: header["file_size"]]
+    if len(body) != header["file_size"]:
+        raise ValueError("decoded payload is shorter than header file size")
+    if zlib.crc32(body) != header["file_crc32"]:
+        raise ValueError("file CRC mismatch")
+    return body
+
+
+def frame_sample_counts(payload_rows):
+    training_samples = TRAINING_SYMBOLS * L
+    header_samples = HEADER_SYMBOLS * L
+    payload_samples = int(payload_rows) * L
+    tail_start = CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES + training_samples + header_samples + payload_samples + INTER_FRAME_GAP_SAMPLES
+    total = tail_start + CHIRP_SAMPLES
+    return {
+        "chirp_samples": CHIRP_SAMPLES,
+        "guard_samples": CHIRP_GUARD_SAMPLES,
+        "training_samples": training_samples,
+        "header_samples": header_samples,
+        "payload_samples": payload_samples,
+        "gap_samples": INTER_FRAME_GAP_SAMPLES,
+        "tail_chirp_start": tail_start,
+        "D_tx": tail_start,
+        "total_samples": total,
+    }
+
+
 def profile_meta():
     return {
-        "profile": "n1_n4096_cp2048_2k_7k",
+        "profile": "n1_chirp_tail_n4096_cp2048_2k_7k",
         "fs": FS,
         "fft_size": N,
         "cp": CP,
@@ -215,4 +375,18 @@ def profile_meta():
         "bin_end": int(ACTIVE_BINS[-1]),
         "bin_start_hz": float(ACTIVE_BINS[0] * FS / N),
         "bin_end_hz": float(ACTIVE_BINS[-1] * FS / N),
+        "chirp_seconds": CHIRP_SECONDS,
+        "chirp_samples": CHIRP_SAMPLES,
+        "chirp_band_hz": [float(CHIRP_BAND_HZ[0]), float(CHIRP_BAND_HZ[1])],
+        "chirp_guard_seconds": CHIRP_GUARD_SECONDS,
+        "chirp_guard_samples": CHIRP_GUARD_SAMPLES,
+        "training_symbols": TRAINING_SYMBOLS,
+        "header_symbols": HEADER_SYMBOLS,
+        "header_copies": HEADER_COPIES,
+        "header_copy_symbols": HEADER_COPY_SYMBOLS,
+        "header_size": HEADER_SIZE,
+        "max_name_bytes": MAX_NAME_BYTES,
+        "inter_frame_gap_seconds": INTER_FRAME_GAP_SECONDS,
+        "inter_frame_gap_samples": INTER_FRAME_GAP_SAMPLES,
+        "header_mod": HEADER_MOD,
     }

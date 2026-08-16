@@ -1,9 +1,10 @@
 # AudioModem Documentation / AudioModem 文档
 
-The current n1 version is a minimal OFDM file-transfer baseline with
-only sync, preamble and data.
+The current n1 version is a no-pilot OFDM file-transfer baseline with
+front/tail chirps, training, header and variable payload.
 
-当前 `n1` 版本只保留同步头、preamble 和 data，是最小 OFDM 文件传输基线。
+当前 `n1` 版本使用首尾 chirp、training、header 和变长 payload，是无 payload pilot 的
+OFDM 文件传输基线。
 
 ## Current Documents / 当前文档
 
