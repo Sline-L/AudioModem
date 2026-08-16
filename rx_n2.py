@@ -57,7 +57,11 @@ from modem_n2 import (
 
 
 CHIRP_MAX_PEAKS = 96
-PAIR_SHORTLIST = 8
+PAIR_SHORTLIST = 32
+CHIRP_FRONT_SCORE_ABS_FLOOR = 0.08
+CHIRP_TAIL_SCORE_ABS_FLOOR = 0.05
+CHIRP_FRONT_SCORE_REL_FLOOR = 0.25
+CHIRP_TAIL_SCORE_REL_FLOOR = 0.18
 FFT_TIMING_PATH_RATIO = 0.5
 FFT_TIMING_MARGIN = max(8, CP // 64)
 GLOBAL_PPM_LIMIT = 80.0
@@ -318,30 +322,13 @@ def find_chirp_pairs(rx, chirp, training, tail_training=False):
     top_chirp_peaks = all_chirp_peaks[
         np.argsort(chirp_score[all_chirp_peaks])[::-1][:CHIRP_MAX_PEAKS]
     ]
+    best_chirp_score = float(np.max(chirp_score[top_chirp_peaks])) if top_chirp_peaks.size else 0.0
+    front_score_floor = max(CHIRP_FRONT_SCORE_ABS_FLOOR, CHIRP_FRONT_SCORE_REL_FLOOR * best_chirp_score)
+    tail_score_floor = max(CHIRP_TAIL_SCORE_ABS_FLOOR, CHIRP_TAIL_SCORE_REL_FLOOR * best_chirp_score)
 
-    training_peaks, _ = signal.find_peaks(training_score, distance=max(L, len(training_wave) // 2))
-    if not training_peaks.size and training_score.size:
-        training_peaks = np.array([int(np.argmax(training_score))])
-    top_training_peaks = training_peaks[
-        np.argsort(training_score[training_peaks])[::-1][:8]
-    ]
-    anchored_fronts = set()
-    training_offset = CHIRP_SAMPLES + CHIRP_GUARD_SAMPLES
-    for training_peak in top_training_peaks:
-        expected_front = int(training_peak - training_offset)
-        nearby = all_chirp_peaks[
-            (all_chirp_peaks >= expected_front - CP)
-            & (all_chirp_peaks <= expected_front + CP)
-        ]
-        nearby = nearby[np.argsort(chirp_score[nearby])[::-1][:8]]
-        anchored_fronts.update(int(index) for index in nearby)
-
-    candidate_indices = list(
-        set(int(index) for index in top_chirp_peaks) | anchored_fronts
-    )
+    candidate_indices = list(set(int(index) for index in top_chirp_peaks))
     candidate_indices.sort(
         key=lambda index: (
-            index not in anchored_fronts,
             -float(chirp_score[index]),
             index,
         )
@@ -353,7 +340,7 @@ def find_chirp_pairs(rx, chirp, training, tail_training=False):
     ]
     fixed_part = fixed_part_samples(tail_training=tail_training)
     timing_cache = {}
-    pairs = []
+    all_pairs = []
     seen_pairs = set()
 
     def grid_tail_indices(front_start):
@@ -415,22 +402,39 @@ def find_chirp_pairs(rx, chirp, training, tail_training=False):
                 "grid_error": float(grid_error),
                 "timing": timing_cache[front_start],
             }
-            pairs.append(candidate)
+            all_pairs.append(candidate)
+    filtered_pairs = [
+        pair
+        for pair in all_pairs
+        if pair["front_score"] >= front_score_floor and pair["tail_score"] >= tail_score_floor
+    ]
+    filter_fallback = bool(all_pairs and not filtered_pairs)
+    pairs = filtered_pairs if filtered_pairs else all_pairs
     pairs.sort(
         key=lambda item: (
+            -(item["front_score"] + item["tail_score"]),
+            -min(item["front_score"], item["tail_score"]),
+            item["grid_error"],
             not item["timing"]["confident"],
             -item["timing"]["peak_score"],
-            -(item["front_score"] + item["tail_score"]),
-            item["grid_error"],
             item["front_start"],
         )
     )
-    return pairs, candidates, training_score
+    diagnostics = {
+        "chirp_score_floor_front": float(front_score_floor),
+        "chirp_score_floor_tail": float(tail_score_floor),
+        "pairs_before_chirp_filter": int(len(all_pairs)),
+        "pairs_after_chirp_filter": int(len(filtered_pairs)),
+        "pairs_after_fallback": int(len(pairs)) if filter_fallback else 0,
+        "training_anchor_disabled": True,
+        "selection_reason": "chirp_pair_quality_first",
+    }
+    return pairs, candidates, training_score, diagnostics
 
 
 def find_chirp_pair(rx, chirp, training=None, tail_training=False):
     if training is not None:
-        pairs, candidates, _ = find_chirp_pairs(rx, chirp, training, tail_training=tail_training)
+        pairs, candidates, _, _ = find_chirp_pairs(rx, chirp, training, tail_training=tail_training)
         if pairs:
             result = dict(pairs[0])
             result["candidates"] = candidates
@@ -1043,6 +1047,15 @@ def run_one(receive, out, a, training, chirp):
     sync_candidates = []
     sync_pairs_evaluated = 0
     sync_pair_shortlist = []
+    sync_diag = {
+        "chirp_score_floor_front": None,
+        "chirp_score_floor_tail": None,
+        "pairs_before_chirp_filter": 0,
+        "pairs_after_chirp_filter": 0,
+        "pairs_after_fallback": 0,
+        "training_anchor_disabled": True,
+        "selection_reason": "not_evaluated",
+    }
     epsilon_search_scores = []
     global_epsilon_search_scores = []
     selected_sfo_source = "local_search"
@@ -1072,7 +1085,7 @@ def run_one(receive, out, a, training, chirp):
     error = ""
 
     try:
-        pairs, sync_candidates, training_score = find_chirp_pairs(
+        pairs, sync_candidates, training_score, sync_diag = find_chirp_pairs(
             rx, chirp, training, tail_training=a.tail_training
         )
         sync_pairs_evaluated = len(pairs)
@@ -1324,6 +1337,13 @@ def run_one(receive, out, a, training, chirp):
         "sync_front_score": float(front_score),
         "sync_tail_score": float(tail_score),
         "sync_pair_candidates_evaluated": int(sync_pairs_evaluated),
+        "sync_chirp_score_floor_front": sync_diag["chirp_score_floor_front"],
+        "sync_chirp_score_floor_tail": sync_diag["chirp_score_floor_tail"],
+        "sync_pairs_before_chirp_filter": int(sync_diag["pairs_before_chirp_filter"]),
+        "sync_pairs_after_chirp_filter": int(sync_diag["pairs_after_chirp_filter"]),
+        "sync_pairs_after_fallback": int(sync_diag["pairs_after_fallback"]),
+        "sync_training_anchor_disabled": bool(sync_diag["training_anchor_disabled"]),
+        "sync_selection_reason": sync_diag["selection_reason"],
         "sync_pair_shortlist": sync_pair_shortlist,
         "sync_candidates": [
             {"start": int(start), "score": float(score)}
