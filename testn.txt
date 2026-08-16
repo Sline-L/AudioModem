@@ -1,9 +1,9 @@
 Step 1: Change N/Change distance
 Step 2: run commend
-python tx_n1.py data/source/file16_test.txt --out data/n1_2_test_n/n4096.wav
+python tx_n1.py data/source/file16_test.txt --out data/n1_4_trainging_symbols/train6.wav
 Step 3: record audio
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n1_2_test_n/rec_n4096_05m_1.wav
-pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n1_2_test_n/rec_n4096_05m_2.wav
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n1_4_trainging_symbols/rec_train6_05m_1.wav
+pw-record --rate 48000 --channels 1 --format s16 --sample-count 480000 data/n1_4_trainging_symbols/rec_train6_05m_2.wav
 Step 4: run commend
-python rx_n1.py data/n1_2_test_n/rec_n4096_05m_1.wav --source data/source/file16_test.txt --out runs/n1_2_test_n/rec_n4096_05m_1
-python rx_n1.py data/n1_2_test_n/rec_n4096_05m_2.wav --source data/source/file16_test.txt --out runs/n1_2_test_n/rec_n4096_05m_2
+python rx_n1.py data/n1_4_trainging_symbols/rec_train6_05m_1.wav --source data/source/file16_test.txt --out runs/n1_4_trainging_symbols/rec_train6_05m_1
+python rx_n1.py data/n1_4_trainging_symbols/rec_train6_05m_2.wav --source data/source/file16_test.txt --out runs/n1_4_trainging_symbols/rec_train6_05m_2

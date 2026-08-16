@@ -7,7 +7,7 @@ import numpy as np
 from scipy import signal
 
 FS = 48000
-N = 8192
+N = 4096
 CP = 2048
 L = N + CP
 I16 = 32768.0
