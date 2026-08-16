@@ -1,14 +1,16 @@
-# N1 Code Guide / N1 代码指南
+# N1/N2 Code Guide / N1/N2 代码指南
 
-N1 uses a single-file frame with two chirps and no payload pilots:
+N2 keeps the N1 frame and adds optional payload LDPC. LDPC coded bits are
+interleaved by default before modulation. N1 remains available as the no-FEC
+baseline.
 
 ```text
 500 ms front chirp, 1k-9k
 30 ms silence guard
-6 front training OFDM symbols
+12 front training OFDM symbols
 9 header OFDM symbols, 3 permuted copies x 3 symbols
-variable payload OFDM symbols
-optional 6 tail training OFDM symbols, enabled by --tail-training
+variable payload OFDM symbols, uncoded or LDPC-coded/interleaved
+optional 12 tail training OFDM symbols, enabled by --tail-training
 50 ms inter-frame gap
 500 ms tail chirp, 1k-9k
 ```
@@ -27,11 +29,12 @@ Self-contained N1 modem implementation:
 - OFDM with `N=4096`, `CP=2048`, symbol length `6144`;
 - active data band from 2 kHz to 7 kHz, bins `171..597`;
 - 500 ms linear chirp sync from 1 kHz to 9 kHz;
-- 6 known QPSK front training OFDM symbols for channel estimation;
-- optional 6-symbol tail training block after payload when `--tail-training` is enabled;
-- with `--tail-training`, RX assumes time-invariant `H` and averages all 12 front+tail training symbols for one global channel estimate;
+- 12 known QPSK front training OFDM symbols for channel estimation;
+- optional 12-symbol tail training block after payload when `--tail-training` is enabled;
+- with `--tail-training`, RX assumes time-invariant `H` and averages all 24 front+tail training symbols for one global channel estimate;
 - fixed 9-symbol BPSK header: 3 permuted 64-byte header copies with bit-majority vote;
-- variable BPSK/QPSK/QAM16 payload with no pilot and no FEC;
+- variable BPSK/QPSK/QAM16 payload with no pilot;
+- N2 optional payload LDPC with deterministic coded-bit interleaving via `--ldpc`;
 - dynamic profile metadata derived from the current `N`, `CP`, and band;
 - chirp coarse SFO plus training/header-guided fine SFO search.
 
@@ -87,6 +90,41 @@ recovered file, when CRC passes
 decoded_payload.bin, when decode fails
 ```
 
+### `modem_n2.py`, `tx_n2.py`, `rx_n2.py`
+
+N2 is the current LDPC experiment line. It copies the N1 synchronization,
+training, header voting, SFO search and optional tail-training behavior. With
+`--ldpc`, payload coded bits are interleaved before modulation and received LLRs
+are deinterleaved before LDPC decoding:
+
+```bash
+python tx_n2.py data/source/file16_test.txt --ldpc --out data/n2/n2_ldpc_interleaved.wav
+python rx_n2.py data/n2/n2_ldpc_interleaved.wav \
+  --ldpc \
+  --source data/source/file16_test.txt \
+  --out runs/n2/ldpc_interleaved
+```
+
+LDPC is controlled by global variables in `modem_n2.py`:
+
+```text
+LDPC_ENABLED_DEFAULT = False
+LDPC_STANDARD = "802.11n"
+LDPC_RATE = "1/2"
+LDPC_Z = 27
+LDPC_PTYPE = "A"
+LDPC_DECODER = "sumprod2"
+LDPC_CORR_FACTOR = 0.7
+LDPC_LLR_SCALE = 1.0
+LDPC_INTERLEAVER_ENABLED = True
+LDPC_INTERLEAVER_SEED = 20260816
+```
+
+N2 header magic is `AMN2`. Header flags bit 0 records whether payload LDPC is
+enabled. TX/RX must use matching LDPC and interleaver globals; the header does
+not carry the full LDPC/interleaver configuration. Old non-interleaved N2 LDPC
+recordings require `LDPC_INTERLEAVER_ENABLED=False` to decode correctly.
+
 When `--source` is provided, `metrics.json` also includes BER diagnostics even
 if header CRC or file CRC fails:
 
@@ -95,6 +133,13 @@ ber_header_vote_ber
 ber_payload_ber
 ber_overall_useful_ber
 ber_payload_byte_error_rate
+ber_ldpc_off
+ber_ldpc_off_interleaved
+ber_ldpc_off_deinterleaved
+ber_ldpc_on
+ber_payload_raw_coded_ber
+ldpc_decode_iterations_mean
+ldpc_decode_iterations_max
 ```
 
 The receiver stores both the raw chirp-derived SFO and the selected SFO from
@@ -143,7 +188,8 @@ Important transmitter options:
 | `input` | `data/source/file16_test.txt` | source file / 源文件 |
 | `--mod` | `qpsk` | payload modulation: `bpsk`, `qpsk`, or `qam16` |
 | `--training-seed` | `3026` | deterministic training symbols |
-| `--tail-training` | off | insert the same 6-symbol training block after payload |
+| `--tail-training` | off | insert the same training block after payload |
+| `--ldpc` | off | N2 only: LDPC-encode payload bits |
 | `--out` | `data/n1/n1.wav` | transmit WAV path |
 
 ## 3. Decode / 解码
@@ -179,7 +225,8 @@ Important receiver options:
 |---|---:|---|
 | `--source` | none | optional truth file for exact match reporting |
 | `--training-seed` | `3026` | must match transmitter |
-| `--tail-training` | off | expect 6 training OFDM symbols after payload and average front+tail training for `H` |
+| `--tail-training` | off | expect the same training block after payload and average front+tail training for `H` |
+| `--ldpc` | off | N2 only: LDPC-decode payload bits |
 | `--tail-search-seconds` | `0.5` | fallback search radius around expected tail chirp |
 | `--out` | `runs/n1` | output directory |
 
@@ -207,6 +254,7 @@ Compile-check:
 
 ```bash
 python -m py_compile modem_n1.py tx_n1.py rx_n1.py record_audio.py
+python -m py_compile lib/ldpc/py/ldpc.py modem_n2.py tx_n2.py rx_n2.py
 ```
 
 Offline file loopback:
@@ -219,13 +267,24 @@ python rx_n1.py data/n1/n1.wav \
 cmp data/source/file16_test.txt runs/n1/offline/file16_test.txt
 ```
 
+N2 LDPC interleaved loopback:
+
+```bash
+python tx_n2.py data/source/file16_test.txt --ldpc --out data/n2/n2_ldpc_interleaved.wav
+python rx_n2.py data/n2/n2_ldpc_interleaved.wav \
+  --ldpc \
+  --source data/source/file16_test.txt \
+  --out runs/n2/ldpc_interleaved
+cmp data/source/file16_test.txt runs/n2/ldpc_interleaved/file16_test.txt
+```
+
 Expected metadata constants:
 
 ```text
 chirp_samples = 24000
 guard_samples = 1440
-training_symbols = 6
-tail_training_symbols = 0, or 6 with --tail-training
+training_symbols = 12
+tail_training_symbols = 0, or 12 with --tail-training
 header_symbols = 9
 header_copies = 3
 header_copy_symbols = 3

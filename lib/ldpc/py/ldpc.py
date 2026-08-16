@@ -27,12 +27,13 @@ class code:
         """Load the C library with platform-specific extension."""
         system = platform.system()
         
+        root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
         if system == 'Windows':
-            lib_name = './bin/c_ldpc.dll'
+            lib_name = os.path.join(root, 'bin', 'c_ldpc.dll')
         elif system == 'Darwin':  # macOS
-            lib_name = './bin/c_ldpc.dylib'
+            lib_name = os.path.join(root, 'bin', 'c_ldpc.dylib')
         else:  # Linux and others
-            lib_name = './bin/c_ldpc.so'
+            lib_name = os.path.join(root, 'bin', 'c_ldpc.so')
         
         # Check if file exists
         if not os.path.exists(lib_name):
