@@ -22,19 +22,21 @@ variable payload OFDM symbols, determined by file length
 The OFDM data band remains:
 
 ```text
-48 kHz, N=4096, CP=2048
-active data band 2 kHz to 7 kHz, bins 171-597
+48 kHz, N=8192, CP=2048
+active data band 2 kHz to 7 kHz, bins 342-1194
 payload mod = bpsk, qpsk, or qam16
 ```
 
-The receiver pairs front/tail chirp candidates to estimate payload OFDM symbol
-count and sampling drift before decoding the header, then applies open-loop
-linear phase correction to training, header and payload symbols. The header uses
-three BPSK copies: identity, permutation A, and permutation B.
+The receiver enumerates front/tail chirp pairs, refines the OFDM start with the
+known eight-symbol training waveform, and shortlists the strongest joint
+candidates. It then searches SFO within `+/-5 ppm` at `0.25 ppm` resolution
+around an in-range chirp estimate, or performs a `[-80, +80] ppm` coarse search
+first when needed. Training consistency and the three header copies jointly
+select the final pair and SFO before open-loop payload correction.
 
-接收端先配对首尾 chirp 候选峰，估计 payload OFDM symbol 数和采样漂移，再解 header，
-并对 training、header、payload 做开环线性相位修正。Header 使用三份 BPSK copy：
-原顺序、permutation A、permutation B。
+接收端枚举首尾 chirp pair，用已知 8-symbol training 细化 OFDM 起点并筛选候选；
+随后在粗 ppm 附近以 0.25 ppm 精调，并结合 training 一致性和三份 header 的可靠度
+选择最终 pair/ppm。Header 使用三份 BPSK copy：原顺序、permutation A、permutation B。
 
 ## Quick Start / 快速开始
 
@@ -51,7 +53,7 @@ cmp data/source/file16_test.txt runs/n1/offline/file16_test.txt
 
 - `modem_n1.py`: N1 WAV I/O, chirp sync, OFDM, header, modulation and phase helpers.
 - `tx_n1.py`: transmitter CLI for the chirp/training/header/payload/tail-chirp frame.
-- `rx_n1.py`: receiver CLI with chirp SFO estimate, channel estimate and file recovery.
+- `rx_n1.py`: receiver CLI with pair/timing/SFO search, channel estimate and file recovery.
 - `data/source/`: source payload files.
 - `data/n1/`: generated transmit WAVs and sidecars, ignored by Git.
 - `runs/n1/`: generated receive/analysis outputs, ignored by Git.

@@ -1,14 +1,13 @@
-from pathlib import Path
 import struct
 import wave
 import zlib
+from pathlib import Path
 
 import numpy as np
 from scipy import signal
 
-
 FS = 48000
-N = 4096
+N = 8192
 CP = 2048
 L = N + CP
 I16 = 32768.0
@@ -396,8 +395,10 @@ def frame_sample_counts(payload_rows):
 
 
 def profile_meta():
+    band_start = int(round(BAND_HZ[0]))
+    band_end = int(round(BAND_HZ[1]))
     return {
-        "profile": "n1_chirp_tail_n4096_cp2048_2k_7k",
+        "profile": f"n1_chirp_tail_n{N}_cp{CP}_{band_start}hz_{band_end}hz",
         "fs": FS,
         "fft_size": N,
         "cp": CP,

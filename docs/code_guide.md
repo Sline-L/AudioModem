@@ -12,9 +12,9 @@ variable payload OFDM symbols
 500 ms tail chirp, 1k-9k
 ```
 
-The tail chirp lets the receiver estimate sampling drift for one-shot file
-transfer. The receiver first estimates payload OFDM symbol count from the
-front-to-tail chirp distance, then decodes the header with SFO correction.
+The two chirps provide coarse frame boundaries, payload length and SFO. The
+known training waveform then refines the OFDM timing, while training/header
+quality selects the final pair and SFO used for open-loop correction.
 
 ## 1. Modules / 模块
 
@@ -23,13 +23,14 @@ front-to-tail chirp distance, then decodes the header with SFO correction.
 Self-contained N1 modem implementation:
 
 - mono 16-bit 48 kHz WAV I/O;
-- OFDM with `N=4096`, `CP=2048`, symbol length `6144`;
-- active data band from 2 kHz to 7 kHz, bins `171..597`;
+- OFDM with `N=8192`, `CP=2048`, symbol length `10240`;
+- active data band from 2 kHz to 7 kHz, bins `342..1194`;
 - 500 ms linear chirp sync from 1 kHz to 9 kHz;
 - 8 known QPSK training OFDM symbols for channel estimation;
 - fixed 9-symbol BPSK header: 3 permuted 64-byte header copies with bit-majority vote;
 - variable BPSK/QPSK/QAM16 payload with no pilot and no FEC;
-- chirp-to-chirp SFO estimate and open-loop linear phase correction.
+- dynamic profile metadata derived from the current `N`, `CP`, and band;
+- chirp coarse SFO plus training/header-guided fine SFO search.
 
 ### `tx_n1.py`
 
@@ -43,15 +44,24 @@ Reads one file and writes a transmit WAV plus deterministic sidecars:
 
 ### `rx_n1.py`
 
-Finds a valid front/tail chirp candidate pair, estimates payload symbol count
-and sampling drift, estimates `H` from training, decodes the permuted-copy
-header, then decodes the exact number of payload OFDM symbols from the header.
+Enumerates legal front/tail chirp pairs, estimates payload symbol count and
+coarse sampling drift, and correlates the complete known training block within
+`+/-CP` of each predicted start. Significant paths are those above both half
+the main peak and `median + 6*MAD`; the earliest is selected with a `CP/64`
+safety margin. The best eight pairs enter the header/SFO search.
 
 Receiver data flow:
 
 ```text
-chirp candidates -> front/tail pair -> estimate payload_symbols/SFO -> training H -> permuted header vote -> payload
+chirp candidates -> legal pairs -> training timing -> top 8 pairs
+-> local/global ppm search -> training/header joint score -> payload
 ```
+
+For an in-range chirp estimate, the local search covers `chirp_ppm +/- 5 ppm`
+in `0.25 ppm` steps. An estimate outside `[-80, +80] ppm` first triggers a
+5 ppm coarse search over that range, followed by the same local search. Header
+CRC wins first; otherwise candidates are ranked by 50% normalized training
+residual, 30% header soft error, and 20% copy disagreement.
 
 Header copy mapping:
 
@@ -90,7 +100,15 @@ header search:
 ```text
 chirp_sfo_ppm
 selected_sfo_ppm
-epsilon_search_scores
+chirp_front_start
+ofdm_frame_start
+fft_timing_offset_samples
+fft_timing_peak_score
+fft_timing_confident
+sync_pair_candidates_evaluated
+sync_pair_shortlist
+local_ppm_scores
+global_ppm_scores
 ```
 
 ## 2. Generate / 生成发送音频
