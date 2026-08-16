@@ -134,12 +134,30 @@ Important receiver options:
 | `--tail-search-seconds` | `0.5` | fallback search radius around expected tail chirp |
 | `--out` | `runs/n1` | output directory |
 
-## 4. Checks / 检查
+## 4. Record / 录音
+
+Install the recording dependency with `requirements.txt`, then record a WAV at
+the fixed format of 48 kHz, mono, signed 16-bit PCM:
+
+```bash
+python record_audio.py data/n1/rec_n1_4.wav --sample-count 400000
+```
+
+Set the actual recording duration directly in seconds:
+
+```bash
+python record_audio.py data/n1/rec_n1_4.wav --seconds 10
+```
+
+Use `--list-devices` to list audio devices, `--device ID` to select an input,
+and `--force` to overwrite an existing WAV.
+
+## 5. Checks / 检查
 
 Compile-check:
 
 ```bash
-python -m py_compile modem_n1.py tx_n1.py rx_n1.py
+python -m py_compile modem_n1.py tx_n1.py rx_n1.py record_audio.py
 ```
 
 Offline file loopback:
