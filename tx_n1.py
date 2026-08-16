@@ -4,7 +4,7 @@ import json
 
 import numpy as np
 
-from step8_modem import (
+from modem_n1 import (
     ACTIVE_BINS,
     FS,
     L,
@@ -20,7 +20,7 @@ from step8_modem import (
 
 
 def args():
-    p = argparse.ArgumentParser(description="make a simple-main sync + preamble + data WAV")
+    p = argparse.ArgumentParser(description="make a n1 sync + preamble + data WAV")
     p.add_argument("input", nargs="?", type=Path, default=Path("data/source/file16_test.txt"))
     p.add_argument("--noise-seconds", type=float, default=0.5)
     p.add_argument("--sync-symbols", type=int, default=16)
@@ -29,7 +29,7 @@ def args():
     p.add_argument("--preamble-seed", type=int, default=3026)
     p.add_argument("--mod", choices=MODS, default="qpsk")
     p.add_argument("--tail-seconds", type=float, default=0.25)
-    p.add_argument("--out", type=Path, default=Path("data/simple_main/simple_main.wav"))
+    p.add_argument("--out", type=Path, default=Path("data/n1/n1.wav"))
     return p.parse_args()
 
 

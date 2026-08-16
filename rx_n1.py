@@ -5,7 +5,7 @@ import json
 
 import numpy as np
 
-from step8_modem import (
+from modem_n1 import (
     ACTIVE_BINS,
     FS,
     L,
@@ -25,7 +25,7 @@ from step8_modem import (
 
 
 def args():
-    p = argparse.ArgumentParser(description="recover a simple-main sync + preamble + data recording")
+    p = argparse.ArgumentParser(description="recover a n1 sync + preamble + data recording")
     p.add_argument("input", nargs="+", type=Path)
     p.add_argument("--source", type=Path, default=None)
     p.add_argument("--noise-seconds", type=float, default=0.5)
@@ -34,7 +34,7 @@ def args():
     p.add_argument("--preamble-symbols", type=int, default=64)
     p.add_argument("--preamble-seed", type=int, default=3026)
     p.add_argument("--mod", choices=MODS, default="qpsk")
-    p.add_argument("--out", type=Path, default=Path("runs/simple_main"))
+    p.add_argument("--out", type=Path, default=Path("runs/n1"))
     return p.parse_args()
 
 

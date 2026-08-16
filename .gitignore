@@ -33,12 +33,12 @@ Thumbs.db
 # Generated modem artifacts from local experiments
 data/tx/*
 data/rx/*
-data/simple_main/*
+data/n1/*
 runs/*
 data/step5_singlebin_sweep/*
 !data/tx/.gitkeep
 !data/rx/.gitkeep
-!data/simple_main/.gitkeep
+!data/n1/.gitkeep
 !runs/.gitkeep
 !data/step5_singlebin_sweep/.gitkeep
 

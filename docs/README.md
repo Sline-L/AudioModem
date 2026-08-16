@@ -1,9 +1,9 @@
 # AudioModem Documentation / AudioModem 文档
 
-The current branch is `simple-main`: a minimal OFDM file-transfer baseline with
+The current n1 version is a minimal OFDM file-transfer baseline with
 only sync, preamble and data.
 
-当前分支是 `simple-main`：只保留同步头、preamble 和 data 的最小 OFDM 文件传输基线。
+当前 `n1` 版本只保留同步头、preamble 和 data，是最小 OFDM 文件传输基线。
 
 ## Current Documents / 当前文档
 
@@ -25,11 +25,11 @@ archive/legacy/docs/
 ## Code Layout / 代码结构
 
 ```text
-step8_modem.py
-tx_step8.py
-rx_step8.py
+modem_n1.py
+tx_n1.py
+rx_n1.py
 data/source/
-data/simple_main/
-runs/simple_main/
+data/n1/
+runs/n1/
 archive/legacy/
 ```

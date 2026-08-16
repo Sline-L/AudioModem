@@ -143,7 +143,7 @@ def unpack_file(data):
         raise ValueError("header CRC mismatch")
     magic, version, name_len, _, size, file_crc, raw_name = HEADER_BODY.unpack(first)
     if magic != MAGIC or version != VERSION or name_len > len(raw_name):
-        raise ValueError("unsupported simple-main header")
+        raise ValueError("unsupported n1 header")
     body = data[HEADER_SIZE : HEADER_SIZE + size]
     if len(body) != size:
         raise ValueError("recording ended before full payload")
@@ -204,7 +204,7 @@ def equalize(received, h):
 
 def profile_meta():
     return {
-        "profile": "simple_main_n4096_cp2048_2k_7k",
+        "profile": "n1_n4096_cp2048_2k_7k",
         "fs": FS,
         "fft_size": N,
         "cp": CP,

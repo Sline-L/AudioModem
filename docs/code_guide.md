@@ -1,4 +1,4 @@
-# Simple-Main Code Guide / Simple-Main 代码指南
+# N1 Code Guide / N1 代码指南
 
 This branch intentionally resets the runnable modem to the simplest useful
 frame:
@@ -15,9 +15,9 @@ clock-fit anchors are used.
 
 ## 1. Modules / 模块
 
-### `step8_modem.py`
+### `modem_n1.py`
 
-Self-contained simple-main modem implementation:
+Self-contained n1 modem implementation:
 
 - mono 16-bit 48 kHz WAV I/O;
 - OFDM with `N=4096`, `CP=2048`, symbol length `6144`;
@@ -27,7 +27,7 @@ Self-contained simple-main modem implementation:
 - one compact file header with filename, byte length and whole-file CRC32;
 - one preamble channel estimate, followed by direct payload equalization.
 
-### `tx_step8.py`
+### `tx_n1.py`
 
 Reads one file and writes a transmit WAV plus deterministic sidecars:
 
@@ -37,7 +37,7 @@ Reads one file and writes a transmit WAV plus deterministic sidecars:
 *.meta.json
 ```
 
-### `rx_step8.py`
+### `rx_n1.py`
 
 Accepts one or more WAV recordings, finds the sync header, estimates channel
 from the preamble, directly demodulates payload symbols, and writes:
@@ -56,13 +56,13 @@ decoded_payload.bin, when decode fails
 Default small text file:
 
 ```bash
-python tx_step8.py
+python tx_n1.py
 ```
 
 Any file:
 
 ```bash
-python tx_step8.py data/source/file15.txt --out data/simple_main/file15.wav
+python tx_n1.py data/source/file15.txt --out data/n1/file15.wav
 ```
 
 Important transmitter options:
@@ -77,30 +77,30 @@ Important transmitter options:
 | `--preamble-seed` | `3026` | preamble seed |
 | `--mod` | `qpsk` | `bpsk`, `qpsk`, or `qam16` |
 | `--tail-seconds` | `0.25` | trailing silence |
-| `--out` | `data/simple_main/simple_main.wav` | transmit WAV path |
+| `--out` | `data/n1/n1.wav` | transmit WAV path |
 
 ## 3. Decode / 解码
 
 Offline loopback:
 
 ```bash
-python rx_step8.py data/simple_main/simple_main.wav \
+python rx_n1.py data/n1/n1.wav \
   --source data/source/file16_test.txt \
-  --out runs/simple_main/offline
+  --out runs/n1/offline
 ```
 
 Recorded WAV:
 
 ```bash
-python rx_step8.py data/rx/receive.wav \
+python rx_n1.py data/rx/receive.wav \
   --source data/source/file16_test.txt \
-  --out runs/simple_main/recording
+  --out runs/n1/recording
 ```
 
 Batch:
 
 ```bash
-python rx_step8.py data/rx/r1.wav data/rx/r2.wav --out runs/simple_main/batch
+python rx_n1.py data/rx/r1.wav data/rx/r2.wav --out runs/n1/batch
 ```
 
 Important receiver options:
@@ -114,24 +114,24 @@ Important receiver options:
 | `--preamble-symbols` | `64` | must match transmitter |
 | `--preamble-seed` | `3026` | must match transmitter |
 | `--mod` | `qpsk` | must match transmitter |
-| `--out` | `runs/simple_main` | output directory |
+| `--out` | `runs/n1` | output directory |
 
 ## 4. Checks / 检查
 
 Compile-check:
 
 ```bash
-python -m py_compile step8_modem.py tx_step8.py rx_step8.py
+python -m py_compile modem_n1.py tx_n1.py rx_n1.py
 ```
 
 Offline file loopback:
 
 ```bash
-python tx_step8.py data/source/file16_test.txt --out data/simple_main/simple_main.wav
-python rx_step8.py data/simple_main/simple_main.wav \
+python tx_n1.py data/source/file16_test.txt --out data/n1/n1.wav
+python rx_n1.py data/n1/n1.wav \
   --source data/source/file16_test.txt \
-  --out runs/simple_main/offline
-cmp data/source/file16_test.txt runs/simple_main/offline/file16_test.txt
+  --out runs/n1/offline
+cmp data/source/file16_test.txt runs/n1/offline/file16_test.txt
 ```
 
 For this branch, success is judged by:
