@@ -40,6 +40,9 @@ MAX_NAME_BYTES = 38
 HEADER_BODY = struct.Struct(">4sBBBBIIHI38s")
 HEADER_SIZE = HEADER_BODY.size + 4
 HEADER_MOD = "bpsk"
+HEADER_BITS = HEADER_SIZE * 8
+HEADER_COPY_BITS = HEADER_COPY_SYMBOLS * len(ACTIVE_BINS)
+HEADER_PERM_SEEDS = (0, 4101, 9103)
 
 
 def read_wav(path):
@@ -131,6 +134,18 @@ def bytes_from_mod(symbols, mod="qpsk"):
     return bytes_from_bits(bits)
 
 
+def bits_from_mod(symbols, mod="qpsk"):
+    symbols = np.asarray(symbols).ravel()
+    if mod == "bpsk":
+        return (symbols.real < 0).astype(np.uint8)
+    if mod == "qpsk":
+        return np.c_[symbols.imag < 0, symbols.real < 0].astype(np.uint8).ravel()
+    if mod == "qam16":
+        z = symbols * np.sqrt(10)
+        return np.c_[_bits_from_pam4(z.imag), _bits_from_pam4(z.real)].ravel()
+    raise ValueError(f"mod must be one of {MODS}")
+
+
 def symbols_from_bytes(data, mod="qpsk", rows=None, bins=ACTIVE_BINS):
     symbols = mod_symbols(data, mod)
     needed_rows = int(np.ceil(len(symbols) / len(bins)))
@@ -172,13 +187,27 @@ def header_bytes(path, mod, payload_rows, payload_mod_symbols):
     return first + struct.pack(">I", zlib.crc32(first))
 
 
+def header_permutation(copy_index):
+    if not 0 <= copy_index < HEADER_COPIES:
+        raise ValueError("invalid N1 header copy index")
+    if copy_index == 0:
+        return np.arange(HEADER_COPY_BITS)
+    rng = np.random.default_rng(HEADER_PERM_SEEDS[copy_index])
+    return rng.permutation(HEADER_COPY_BITS)
+
+
+def bpsk_symbols_from_bits(bits):
+    return np.where(np.asarray(bits, dtype=np.uint8), -1.0, 1.0).astype(complex)
+
+
 def header_symbols(path, mod, payload_rows, payload_mod_symbols):
-    copy = symbols_from_bytes(
-        header_bytes(path, mod, payload_rows, payload_mod_symbols),
-        HEADER_MOD,
-        rows=HEADER_COPY_SYMBOLS,
-    )[0]
-    return np.vstack([copy] * HEADER_COPIES)
+    source = np.zeros(HEADER_COPY_BITS, dtype=np.uint8)
+    source[:HEADER_BITS] = bits_from_bytes(header_bytes(path, mod, payload_rows, payload_mod_symbols))
+    copies = []
+    for copy_index in range(HEADER_COPIES):
+        tx_bits = source[header_permutation(copy_index)]
+        copies.append(bpsk_symbols_from_bits(tx_bits).reshape(HEADER_COPY_SYMBOLS, len(ACTIVE_BINS)))
+    return np.vstack(copies)
 
 
 def parse_header(raw):
@@ -208,10 +237,14 @@ def header_copy_bytes(equalized_symbols):
     raw_copies = []
     bit_copies = []
     crc_ok = []
-    for copy in copies:
-        raw = bytes_from_mod(copy.ravel(), HEADER_MOD)[:HEADER_SIZE]
+    for copy_index, copy in enumerate(copies):
+        rx_bits = bits_from_mod(copy.ravel(), HEADER_MOD)[:HEADER_COPY_BITS]
+        depermuted = np.empty(HEADER_COPY_BITS, dtype=np.uint8)
+        depermuted[header_permutation(copy_index)] = rx_bits
+        header_bits = depermuted[:HEADER_BITS]
+        raw = bytes_from_bits(header_bits)[:HEADER_SIZE]
         raw_copies.append(raw)
-        bit_copies.append(bits_from_bytes(raw)[: HEADER_SIZE * 8])
+        bit_copies.append(header_bits)
         try:
             parse_header(raw)
             crc_ok.append(True)
@@ -385,6 +418,10 @@ def profile_meta():
         "header_copies": HEADER_COPIES,
         "header_copy_symbols": HEADER_COPY_SYMBOLS,
         "header_size": HEADER_SIZE,
+        "header_bits": HEADER_BITS,
+        "header_copy_bits": HEADER_COPY_BITS,
+        "header_permutation_used": True,
+        "header_permutation_seeds": [int(seed) for seed in HEADER_PERM_SEEDS],
         "max_name_bytes": MAX_NAME_BYTES,
         "inter_frame_gap_seconds": INTER_FRAME_GAP_SECONDS,
         "inter_frame_gap_samples": INTER_FRAME_GAP_SAMPLES,

@@ -6,14 +6,15 @@ N1 uses a single-file frame with two chirps and no payload pilots:
 150 ms front chirp, 1k-9k
 30 ms silence guard
 8 training OFDM symbols
-9 header OFDM symbols, 3 repeated copies x 3 symbols
+9 header OFDM symbols, 3 permuted copies x 3 symbols
 variable payload OFDM symbols
 50 ms inter-frame gap
 150 ms tail chirp, 1k-9k
 ```
 
 The tail chirp lets the receiver estimate sampling drift for one-shot file
-transfer. Payload length is determined by input file size.
+transfer. The receiver first estimates payload OFDM symbol count from the
+front-to-tail chirp distance, then decodes the header with SFO correction.
 
 ## 1. Modules / 模块
 
@@ -26,7 +27,7 @@ Self-contained N1 modem implementation:
 - active data band from 2 kHz to 7 kHz, bins `171..597`;
 - 150 ms linear chirp sync from 1 kHz to 9 kHz;
 - 8 known QPSK training OFDM symbols for channel estimation;
-- fixed 9-symbol BPSK header: 3 repeated 64-byte header copies with bit-majority vote;
+- fixed 9-symbol BPSK header: 3 permuted 64-byte header copies with bit-majority vote;
 - variable BPSK/QPSK/QAM16 payload with no pilot and no FEC;
 - chirp-to-chirp SFO estimate and open-loop linear phase correction.
 
@@ -42,9 +43,23 @@ Reads one file and writes a transmit WAV plus deterministic sidecars:
 
 ### `rx_n1.py`
 
-Finds front/tail chirps, estimates sampling drift, estimates `H` from training,
-decodes header, then decodes the exact number of payload OFDM symbols from the
-header.
+Finds front/tail chirps, estimates payload symbol count and sampling drift,
+estimates `H` from training, decodes the permuted-copy header, then decodes the
+exact number of payload OFDM symbols from the header.
+
+Receiver data flow:
+
+```text
+front chirp -> tail chirp -> estimate payload_symbols/SFO -> training H -> permuted header vote -> payload
+```
+
+Header copy mapping:
+
+```text
+copy 1 identity
+copy 2 permutation A
+copy 3 permutation B
+```
 
 Main outputs:
 
@@ -57,6 +72,16 @@ payload_symbols.npy
 decoded_header.bin
 recovered file, when CRC passes
 decoded_payload.bin, when decode fails
+```
+
+When `--source` is provided, `metrics.json` also includes BER diagnostics even
+if header CRC or file CRC fails:
+
+```text
+ber_header_vote_ber
+ber_payload_ber
+ber_overall_useful_ber
+ber_payload_byte_error_rate
 ```
 
 ## 2. Generate / 生成发送音频
@@ -106,7 +131,7 @@ Important receiver options:
 |---|---:|---|
 | `--source` | none | optional truth file for exact match reporting |
 | `--training-seed` | `3026` | must match transmitter |
-| `--tail-search-seconds` | `0.5` | search radius around expected tail chirp |
+| `--tail-search-seconds` | `0.5` | fallback search radius around expected tail chirp |
 | `--out` | `runs/n1` | output directory |
 
 ## 4. Checks / 检查
@@ -137,11 +162,12 @@ header_symbols = 9
 header_copies = 3
 header_copy_symbols = 3
 header_size = 64
+header_permutation_used = true
 inter_frame_gap_samples = 2400
 ```
 
 Success is judged by:
 
 ```text
-front_chirp_score -> tail_chirp_score -> header_ok -> file_crc_ok -> file_match
+front_chirp_score -> tail_chirp_score -> payload_symbols_guess -> sfo_ppm -> header_ok -> file_crc_ok -> file_match -> ber_payload_ber
 ```
