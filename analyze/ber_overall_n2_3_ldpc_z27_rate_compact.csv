@@ -1,0 +1,10 @@
+series,run,beroverall
+runs/n2_3_ldpc_z27_rate,r1_2_10dm_1,0.04%
+runs/n2_3_ldpc_z27_rate,r1_2_10dm_2,0.00%
+runs/n2_3_ldpc_z27_rate,r1_2_10dm_3,0.00%
+runs/n2_3_ldpc_z27_rate,r2_3_10dm_1,0.29%
+runs/n2_3_ldpc_z27_rate,r2_3_10dm_2,0.24%
+runs/n2_3_ldpc_z27_rate,r2_3_10dm_3,0.00%
+runs/n2_3_ldpc_z27_rate,r3_4_10dm_1,2.32%
+runs/n2_3_ldpc_z27_rate,r3_4_10dm_2,0.64%
+runs/n2_3_ldpc_z27_rate,r3_4_10dm_3,0.22%

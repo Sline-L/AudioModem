@@ -1,0 +1,7 @@
+series,run,beroverall
+runs/n2_1,rec_5dm,0.93%
+runs/n2_2_interleave,rec_t_5dm,0.48%
+runs/n2_1,rec_5dm_2,0.78%
+runs/n2_2_interleave,rec_t_5dm_2,0.59%
+runs/n2_1,rec_10dm,0.54%
+runs/n2_2_interleave,rec_t_10dm,0.79%
