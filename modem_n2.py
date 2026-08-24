@@ -37,6 +37,7 @@ MOD_IDS = {name: index for index, name in enumerate(MODS)}
 MAGIC = b"AMN2"
 VERSION = 1
 HEADER_FLAG_LDPC = 0x01
+HEADER_EXTENDED_PAYLOAD_MOD_SYMBOLS = 0xFFFF
 MAX_NAME_BYTES = 38
 HEADER_BODY = struct.Struct(">4sBBBBIIHI38s")
 HEADER_SIZE = HEADER_BODY.size + 4
@@ -47,8 +48,8 @@ HEADER_PERM_SEEDS = (0, 4101, 9103)
 
 LDPC_ENABLED_DEFAULT = False
 LDPC_STANDARD = "802.11n"
-LDPC_RATE = "2/3"
-LDPC_Z = 54
+LDPC_RATE = "1/2"
+LDPC_Z = 27
 LDPC_PTYPE = "A"
 LDPC_DECODER = "sumprod2"
 LDPC_CORR_FACTOR = 0.7
@@ -230,6 +231,16 @@ def ldpc_code():
     return _LDPC_CODE
 
 
+def expected_payload_mod_symbols(byte_count, mod, ldpc_enabled=False):
+    bit_count = int(byte_count) * 8
+    if ldpc_enabled:
+        code = ldpc_code()
+        blocks = (bit_count + code.K - 1) // code.K
+        bit_count = blocks * code.N
+    width = bits_per_symbol(mod)
+    return (bit_count + width - 1) // width
+
+
 def ldpc_meta():
     code = ldpc_code()
     return {
@@ -340,6 +351,9 @@ def header_bytes(path, mod, payload_rows, payload_mod_symbols, ldpc_enabled=LDPC
         raise ValueError("N2 header supports files up to 2^32-1 bytes")
     if payload_rows > 0xFFFF:
         raise ValueError("N2 header supports up to 65535 payload OFDM symbols")
+    stored_payload_mod_symbols = int(payload_mod_symbols)
+    if stored_payload_mod_symbols > 0xFFFF:
+        stored_payload_mod_symbols = HEADER_EXTENDED_PAYLOAD_MOD_SYMBOLS
     flags = HEADER_FLAG_LDPC if ldpc_enabled else 0
     first = HEADER_BODY.pack(
         MAGIC,
@@ -349,7 +363,7 @@ def header_bytes(path, mod, payload_rows, payload_mod_symbols, ldpc_enabled=LDPC
         flags,
         len(body),
         int(payload_rows),
-        payload_mod_symbols,
+        stored_payload_mod_symbols,
         zlib.crc32(body),
         name.ljust(MAX_NAME_BYTES, b"\0"),
     )
@@ -393,14 +407,20 @@ def parse_header(raw):
         raise ValueError("unsupported N2 header")
     if name_len > len(raw_name) or mod_id >= len(MODS):
         raise ValueError("invalid N2 header fields")
+    mod = MODS[mod_id]
+    ldpc_enabled = bool(flags & HEADER_FLAG_LDPC)
+    if payload_mod_symbols == HEADER_EXTENDED_PAYLOAD_MOD_SYMBOLS:
+        expected = expected_payload_mod_symbols(size, mod, ldpc_enabled=ldpc_enabled)
+        if expected >= HEADER_EXTENDED_PAYLOAD_MOD_SYMBOLS:
+            payload_mod_symbols = expected
     return {
         "name": Path(raw_name[:name_len].decode("utf-8")).name,
-        "mod": MODS[mod_id],
+        "mod": mod,
         "file_size": int(size),
         "payload_symbols": int(payload_rows),
         "payload_mod_symbols": int(payload_mod_symbols),
         "file_crc32": int(file_crc),
-        "ldpc_enabled": bool(flags & HEADER_FLAG_LDPC),
+        "ldpc_enabled": ldpc_enabled,
         "flags": int(flags),
     }
 
