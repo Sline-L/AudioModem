@@ -29,7 +29,8 @@ class DecodeError(RuntimeError):
 def _diagnostics():
     return {
         "metrics": {"channel_index": None, "chirp_score": None, "training_score": None,
-                    "sfo": None, "stage": "wav_format", "header_ok": False},
+        "sfo": None, "stage": "wav_format", "header_ok": False,
+        "verified": False, "strict_stage": None},
         "debug": {}, "raw": b"", "H": np.empty(0, dtype=complex),
         "phase_fit": np.empty((0, 2), dtype=float), "payload": b"",
         "payload_symbols": np.empty((0, K1 - K0 + 1), dtype=np.complex128),
@@ -75,18 +76,23 @@ def _receive(path, source, state):
         _, pcm = read_pcm16_wav(path)
         samples = pcm.astype(float) / 32768.0
         stage = "channel"
+        strict_stage = None
         try:
-            choice = choose_channel(samples)
-        except SyncError:
-            # A single channel has no selection ambiguity: expose its sync failure.
             if samples.ndim == 1:
-                metrics["channel_index"] = 0
-                synchronize(samples)
-            raise
+                strict_sync = synchronize(samples)
+                choice = type("Choice", (), {"index": 0, "samples": samples, "score": strict_sync.score})()
+            else:
+                choice = choose_channel(samples)
+                strict_sync = synchronize(choice.samples)
+        except SyncError as exc:
+            strict_stage = exc.stage
+            choice = choose_channel(samples, strict=False)
+            strict_sync = synchronize(choice.samples, strict=False)
+        metrics.update(verified=strict_stage is None, strict_stage=strict_stage)
         metrics["channel_index"] = choice.index
         samples = choice.samples
         stage = "chirp"
-        sync = synchronize(samples)
+        sync = strict_sync
         metrics.update(sfo=sync.sfo, sync_score=sync.score, start=sync.start,
                        training_start=sync.training_start, payload_start=sync.payload_start)
         chirp = linear_chirp()

@@ -71,7 +71,7 @@ def _normalized_correlation(samples, template):
     return np.clip(scores, 0.0, 1.0)
 
 
-def _chirp_candidates(samples):
+def _chirp_candidates(samples, strict=True):
     chirp = linear_chirp()
     reference = chirp[:_CHIRP_MATCH_SAMPLES]
     scores = _normalized_correlation(samples, reference)
@@ -83,7 +83,7 @@ def _chirp_candidates(samples):
             break
         index = int(np.argmax(work))
         score = float(work[index])
-        if score < _CHIRP_THRESHOLD:
+        if strict and score < _CHIRP_THRESHOLD:
             break
         candidates.append((index, score))
         lo = max(0, index - exclusion)
@@ -92,8 +92,8 @@ def _chirp_candidates(samples):
     return sorted(candidates)
 
 
-def _compatible_pair(samples):
-    candidates = _chirp_candidates(samples)
+def _compatible_pair(samples, strict=True):
+    candidates = _chirp_candidates(samples, strict=strict)
     if not candidates:
         raise SyncError("chirp", "no chirp candidate passed normalized correlation")
     pairs = []
@@ -107,6 +107,15 @@ def _compatible_pair(samples):
                 score = float(np.sqrt(front_score * rear_score))
                 pairs.append((score, front_index, rear_index))
     if not pairs:
+        if not strict:
+            # Last-resort timing for damaged recordings: retain one candidate
+            # from each half of the capture and let later stages score it.
+            half = samples.size // 2
+            front_index, front_score = max(candidates, key=lambda item: item[1])
+            rear_candidates = [(index, score) for index, score in candidates if index >= half]
+            if rear_candidates:
+                rear_index, rear_score = max(rear_candidates, key=lambda item: item[1])
+                return float(np.sqrt(front_score * rear_score)), front_index, rear_index
         raise SyncError("chirp", "no compatible front/rear chirp pair")
     return max(pairs, key=lambda item: item[0])
 
@@ -118,16 +127,18 @@ def _scaled_chirp(sfo):
     return np.interp(positions, np.arange(reference.size), reference)
 
 
-def _complete_chirp(samples, approximate_start, sfo):
+def _complete_chirp(samples, approximate_start, sfo, strict=True):
     reference = _scaled_chirp(sfo)
     lo = max(0, approximate_start - _CHIRP_REFINE_RADIUS)
     hi = min(samples.size, approximate_start + reference.size + _CHIRP_REFINE_RADIUS)
     scores = _normalized_correlation(samples[lo:hi], reference)
     if scores.size == 0:
+        if not strict:
+            return int(approximate_start), 0.0
         raise SyncError("chirp", "complete chirp window is truncated")
     offset = int(np.argmax(scores))
     score = float(scores[offset])
-    if score < _CHIRP_THRESHOLD:
+    if strict and score < _CHIRP_THRESHOLD:
         raise SyncError("chirp", f"complete chirp score {score:.3f} is too low")
     return lo + offset, score
 
@@ -202,7 +213,7 @@ def _timing_score(samples, start, sfo):
     return 0.75 * frequency + 0.25 * cyclic_prefix
 
 
-def _training_start(samples, expected, sfo):
+def _training_start(samples, expected, sfo, strict=True):
     lo = max(0, int(expected) - _TIMING_RADIUS)
     hi = min(samples.size - 8 * L, int(expected) + _TIMING_RADIUS)
     if hi < lo:
@@ -216,19 +227,19 @@ def _training_start(samples, expected, sfo):
     fine_hi = min(hi, coarse_start + _TIMING_STEP)
     fine_scores = [(_timing_score(samples, index, sfo), index) for index in range(fine_lo, fine_hi + 1)]
     score, start = max(fine_scores)
-    if score < _TRAINING_THRESHOLD:
+    if strict and score < _TRAINING_THRESHOLD:
         raise SyncError("training", f"frequency-domain training score {score:.3f} is too low")
     return start, score
 
 
-def _coarse_training_sfo(samples, front_start):
+def _coarse_training_sfo(samples, front_start, strict=True):
     scored = []
     for candidate in np.arange(-_MAX_SFO, _MAX_SFO + _SFO_STEP / 2.0, _SFO_STEP):
         expected = front_start + int(round((3 * FS + FS // 2) * (1.0 + candidate)))
         score = _timing_score(samples, expected, float(candidate))
         scored.append((score, float(candidate), expected))
     score, sfo, expected = max(scored, key=lambda item: item[0])
-    if score < _TRAINING_THRESHOLD:
+    if strict and score < _TRAINING_THRESHOLD:
         raise SyncError("training", f"coarse frequency-domain training score {score:.3f} is too low")
     return sfo, expected
 
@@ -251,37 +262,43 @@ def _phase_fit_sfo(products, coarse_sfo):
     return float(refined)
 
 
-def _estimate_sfo(samples, training_start, coarse_hint):
+def _estimate_sfo(samples, training_start, coarse_hint, strict=True):
     coarse_sfo = float(np.clip(coarse_hint, -_MAX_SFO, _MAX_SFO))
     coarse_score, products = _frequency_score(
         _training_observations(samples, training_start, coarse_sfo)
     )
-    if products is None or coarse_score < _TRAINING_THRESHOLD:
+    if products is None or (strict and coarse_score < _TRAINING_THRESHOLD):
         raise SyncError("sfo", f"coarse SFO score {coarse_score:.3f} is too low")
-    refined_sfo = _phase_fit_sfo(products, coarse_sfo)
+    try:
+        refined_sfo = _phase_fit_sfo(products, coarse_sfo)
+    except SyncError:
+        if strict:
+            raise
+        refined_sfo = coarse_sfo
     refined_score, _ = _frequency_score(
         _training_observations(samples, training_start, refined_sfo)
     )
-    if refined_score < _TRAINING_THRESHOLD:
+    if strict and refined_score < _TRAINING_THRESHOLD:
         raise SyncError("sfo", f"fitted SFO score {refined_score:.3f} is too low")
     return refined_sfo, refined_score
 
 
-def synchronize(samples):
+def synchronize(samples, strict=True):
     x = _mono_samples(samples)
-    chirp_score, front_start, rear_start = _compatible_pair(x)
-    coarse_sfo, expected_training = _coarse_training_sfo(x, front_start)
-    training_start, timing_score = _training_start(x, expected_training, coarse_sfo)
-    sfo, sfo_score = _estimate_sfo(x, training_start, coarse_sfo)
-    front_start, front_chirp_score = _complete_chirp(x, front_start, sfo)
-    rear_start, rear_chirp_score = _complete_chirp(x, rear_start, sfo)
-    _validate_chirp_interval(front_start, rear_start, sfo)
+    chirp_score, front_start, rear_start = _compatible_pair(x, strict=strict)
+    coarse_sfo, expected_training = _coarse_training_sfo(x, front_start, strict)
+    training_start, timing_score = _training_start(x, expected_training, coarse_sfo, strict)
+    sfo, sfo_score = _estimate_sfo(x, training_start, coarse_sfo, strict)
+    front_start, front_chirp_score = _complete_chirp(x, front_start, sfo, strict)
+    rear_start, rear_chirp_score = _complete_chirp(x, rear_start, sfo, strict)
+    if strict:
+        _validate_chirp_interval(front_start, rear_start, sfo)
     payload_start = training_start + int(round(8 * L * (1.0 + sfo)))
     score = min(chirp_score, front_chirp_score, rear_chirp_score, timing_score, sfo_score)
     return SyncResult(front_start, training_start, payload_start, sfo, float(score))
 
 
-def choose_channel(samples):
+def choose_channel(samples, strict=True):
     data = np.asarray(samples)
     if np.iscomplexobj(data) or data.ndim not in (1, 2):
         raise SyncError("channel", "samples must be real mono or stereo")
@@ -292,7 +309,7 @@ def choose_channel(samples):
     failures = []
     for index, channel in enumerate(channels):
         try:
-            result = synchronize(channel)
+            result = synchronize(channel, strict=strict)
         except SyncError as exc:
             failures.append(f"channel {index} {exc.stage}")
         else:

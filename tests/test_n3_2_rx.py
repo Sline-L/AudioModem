@@ -126,3 +126,19 @@ def test_stereo_selects_signal_channel(standard, tmp_path):
     metrics, debug = diagnostics(out, "header_ok")
     assert metrics["channel_index"] == 1
     assert "header_ber" not in debug
+
+
+def test_low_confidence_chirp_still_recovers_candidate_payload(standard, tmp_path):
+    receiver = load_receiver()
+    source, wav = standard
+    _, samples = read_pcm16_wav(wav)
+    # Keep the acquisition prefix but destroy the rest of the final marker.
+    rear = len(samples) - 3 * FS
+    samples[rear + FS // 10:] = 0
+    write_pcm16_wav(wav, samples)
+    out = tmp_path / "candidate"
+    recovered = receiver.run_rx(wav, out, source)
+    assert recovered.read_bytes() == source.read_bytes()
+    metrics = json.loads((out / "metrics.json").read_text())
+    assert metrics["verified"] is False
+    assert metrics["strict_stage"] == "chirp"
