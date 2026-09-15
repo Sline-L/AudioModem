@@ -216,3 +216,44 @@ Success is judged by:
 ```text
 front_chirp_score -> tail_chirp_score -> payload_symbols_guess -> sfo_ppm -> header_ok -> file_crc_ok -> file_match -> ber_payload_ber
 ```
+
+## 6. N3.1 standard-compatible implementation
+
+N3.1 is isolated under `n3_1/` and follows the executable reference in
+`Standardization/example_tx.py`. It uses mono 48 kHz PCM, FFT `8192`, CP
+`2048`, active bins `400..2391`, QPSK only, 8 leading plus 8 trailing training
+symbols generated with seed `80`, identical 3-second linear chirps from 100 Hz
+to 20 kHz, 0.5-second silence guards, one 249-byte `PH` version-0 header block,
+IEEE 802.16 rate-1/2 LDPC with `Z=166`, and the per-codeword `0x5A4D`
+scrambler. Header copies, `AMN2`, 802.11n LDPC, and N2's extra interleaver are
+not part of N3.1.
+
+Generate a standard frame and recover it offline:
+
+```powershell
+python -m n3_1.tx data/source/file16_test.txt --out data/n3_1/file16_standard.wav
+python -m n3_1.rx data/n3_1/file16_standard.wav `
+  --source data/source/file16_test.txt `
+  --out runs/n3_1/offline
+```
+
+`n3_1.tx` writes the WAV plus deterministic training, header, and metadata
+sidecars. `n3_1.rx` writes the recovered file and diagnostics (`metrics.json`,
+`summary.csv`, `H.npy`, `training_phase_fit.npy`, `payload_symbols.npy`,
+`decoded_header.bin`, and `decoded_payload.bin`). It retains N2's candidate
+chirp pairing, training timing refinement, SFO search, channel estimation, and
+BER reporting without changing the N3.1 wire format. N3.1 also writes
+`header_debug.json`; with `--source`, it records the decoded Header's exact
+bit-error count and rate against the expected 249-byte Header. SFO trials use a coarse
+1-ppm pass followed by a 0.25-ppm local refinement; a candidate's FFT blocks
+are cached so only phase correction is repeated during the search.
+
+For a controlled payload-error experiment, `python -m n3_1.ber_test` creates a
+standard frame and flips a deterministic fraction of post-LDPC QPSK bits while
+leaving Header and training unchanged. The generated `.ber.json` records the
+requested and actual injected BER. This measures hard, high-confidence bit
+flips and is intentionally distinct from a noisy acoustic recording with soft
+LLR reliability.
+# N3.2 独立标准版本
+
+`n3_2/` 是独立的标准帧实现，不依赖 N3/N3_1。使用 `python -m n3_2.tx INPUT --out WAV` 发射，使用 `python -m n3_2.rx WAV --out DIR [--source INPUT]` 恢复；接收目录含恢复文件和同步、Header、信道诊断。

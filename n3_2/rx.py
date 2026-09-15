@@ -31,7 +31,8 @@ def _diagnostics():
         "metrics": {"channel_index": None, "chirp_score": None, "training_score": None,
                     "sfo": None, "stage": "wav_format", "header_ok": False},
         "debug": {}, "raw": b"", "H": np.empty(0, dtype=complex),
-        "phase_fit": np.empty((0, 2), dtype=float),
+        "phase_fit": np.empty((0, 2), dtype=float), "payload": b"",
+        "payload_symbols": np.empty((0, K1 - K0 + 1), dtype=np.complex128),
     }
 
 
@@ -138,6 +139,7 @@ def _receive(path, source, state):
             raise ValueError("Header filename is empty")
         metrics.update(stage="header_ok", header_ok=True, **header)
         state["debug"]["header"] = header
+        state.update(samples=samples, sync=sync, h=h, noise_var=noise_var)
         return header, metrics
     except (SyncError, OSError, ValueError, RuntimeError, wave.Error, EOFError) as exc:
         if isinstance(exc, SyncError):
@@ -160,6 +162,9 @@ def _write_diagnostics(out, state):
     for name, values in (("metrics", state["metrics"]), ("header_debug", state["debug"])):
         (out / f"{name}.json").write_text(json.dumps(values, indent=2, allow_nan=False), encoding="utf-8")
     (out / "decoded_header.bin").write_bytes(state["raw"])
+    if state["payload"]:
+        (out / "decoded_payload.bin").write_bytes(state["payload"])
+        np.save(out / "payload_symbols.npy", state["payload_symbols"])
     np.save(out / "H.npy", state["H"])
     np.save(out / "training_phase_fit.npy", state["phase_fit"])
     with (out / "summary.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -168,15 +173,41 @@ def _write_diagnostics(out, state):
         writer.writerow(state["metrics"])
 
 
+def _decode_payload(header, state):
+    sync, h = state["sync"], state["h"]
+    valid = np.abs(h) > max(float(np.max(np.abs(h))) * 1e-8, 1e-12)
+    start = sync.training_start + 9 * L * (1.0 + sync.sfo)
+    observed = _observations(state["samples"], start, sync.sfo, header["payload_symbols"])
+    equalized = np.zeros_like(observed)
+    np.divide(observed, h, out=equalized, where=valid)
+    codec = StandardLdpc()
+    blocks = []
+    for index, symbol in enumerate(equalized):
+        llr = np.clip(qpsk_llr(symbol, state["noise_var"]), -30.0, 30.0)
+        bits, ok = codec.decode_llr(llr)
+        if not ok:
+            raise ValueError(f"payload block {index} LDPC parity check failed")
+        blocks.append(np.packbits(bits, bitorder="big").tobytes())
+    state["payload_symbols"] = equalized
+    state["payload"] = b"".join(blocks)[:header["size"]]
+
+
 def run_rx(path: Path, out: Path, source: Path | None = None) -> Path:
-    """Write Header diagnostics on success or failure, without recovering payload."""
+    """Recover the Header-declared payload and always write diagnostics."""
     state = _diagnostics()
     out = Path(out)
     try:
-        _receive(Path(path), source, state)
+        header, _ = _receive(Path(path), source, state)
+        try:
+            _decode_payload(header, state)
+        except (ValueError, RuntimeError) as exc:
+            state["metrics"].update(stage="ldpc_payload", header_ok=False, error=str(exc))
+            raise DecodeError("ldpc_payload", str(exc), state["metrics"]) from exc
     finally:
         _write_diagnostics(out, state)
-    return out
+    recovered = out / Path(header["name"]).name
+    recovered.write_bytes(state["payload"])
+    return recovered
 
 
 def main() -> int:
@@ -190,7 +221,7 @@ def main() -> int:
     except DecodeError as exc:
         print(str(exc))
         return 1
-    print(f"Header decoded; diagnostics written to {args.out}")
+    print(f"File recovered to {args.out}")
     return 0
 
 

@@ -26,7 +26,7 @@ def standard(tmp_path):
 def diagnostics(out, stage):
     expected = {"metrics.json", "header_debug.json", "decoded_header.bin", "H.npy",
                 "training_phase_fit.npy", "summary.csv"}
-    assert {p.name for p in out.iterdir()} == expected
+    assert expected <= {p.name for p in out.iterdir()}
     metrics = json.loads((out / "metrics.json").read_text())
     debug = json.loads((out / "header_debug.json").read_text())
     assert metrics["stage"] == stage
@@ -44,7 +44,8 @@ def test_standard_header_and_success_artifacts(standard, tmp_path):
     assert header == {"name": "sample.bin", "size": 300, "payload_symbols": 2}
     assert metrics["header_ok"] is True
     out = tmp_path / "received"
-    assert receiver.run_rx(wav, out, source) == out
+    recovered = receiver.run_rx(wav, out, source)
+    assert recovered.read_bytes() == source.read_bytes()
     metrics, debug = diagnostics(out, "header_ok")
     assert debug["header_bit_errors"] == 0
     assert debug["header_ber"] == 0.0
@@ -52,6 +53,8 @@ def test_standard_header_and_success_artifacts(standard, tmp_path):
     assert np.load(out / "H.npy").shape == (1992,)
     assert np.load(out / "training_phase_fit.npy").shape == (8, 2)
     assert (out / "decoded_header.bin").read_bytes() == wav.with_suffix(".header.bin").read_bytes()
+    assert (out / "decoded_payload.bin").read_bytes() == source.read_bytes()
+    assert np.load(out / "payload_symbols.npy").shape == (2, 1992)
 
 
 def test_nonstandard_rate_preserves_wav_format_stage(tmp_path):
