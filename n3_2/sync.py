@@ -132,11 +132,14 @@ def _complete_chirp(samples, approximate_start, sfo):
 def _validate_chirp_interval(front_start, rear_start, sfo):
     interval = rear_start - front_start
     minimum = _MIN_CHIRP_INTERVAL * (1.0 + sfo)
-    if interval < round(minimum):
+    # Chirp starts are integer samples while fitted SFO is continuous. Reuse
+    # the CP-sized symbol-grid residual budget so the boundary checks agree.
+    interval_tolerance = _TIMING_RADIUS
+    if interval < minimum - interval_tolerance:
         raise SyncError("chirp", "complete chirp pair is shorter than a standard frame")
     payload_symbols = int(round((interval - minimum) / (L * (1.0 + sfo))))
     expected = (_MIN_CHIRP_INTERVAL + payload_symbols * L) * (1.0 + sfo)
-    if payload_symbols < 0 or abs(interval - expected) > _TIMING_RADIUS:
+    if payload_symbols < 0 or abs(interval - expected) > interval_tolerance:
         raise SyncError("chirp", "complete chirp pair is off the payload symbol grid")
 
 

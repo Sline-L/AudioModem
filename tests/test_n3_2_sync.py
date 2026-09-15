@@ -67,3 +67,9 @@ def test_sync_rejects_rear_chirp_off_the_payload_symbol_grid():
 def test_sync_accepts_minimum_interval_with_fixed_rear_training():
     result = synchronize(known_standard_frame(payload_symbols=0))
     assert result.score > 0.9
+
+
+def test_sync_accepts_negative_sfo_at_minimum_frame_interval():
+    compressed = resample_poly(known_standard_frame(payload_symbols=0), 39999, 40000)
+    result = synchronize(compressed)
+    assert result.sfo == pytest.approx(-1 / 40000, abs=3e-6)
