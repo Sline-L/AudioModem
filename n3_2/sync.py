@@ -9,9 +9,10 @@ from .modem import CP, FS, K0, K1, L, N, linear_chirp, training_symbols
 _FRONT_TRAINING = training_symbols()[:8, K0:K1 + 1]
 _CHIRP_THRESHOLD = 0.35
 _CHIRP_MATCH_SAMPLES = FS // 10
+_CHIRP_REFINE_RADIUS = 128
 _TRAINING_THRESHOLD = 0.55
 _MAX_SFO = 0.005
-_SFO_STEP = 0.00025
+_SFO_STEP = 0.00005
 _TIMING_RADIUS = CP
 _TIMING_STEP = 32
 _MIN_CHIRP_INTERVAL = 4 * FS + 16 * L
@@ -98,15 +99,45 @@ def _compatible_pair(samples):
             if rear_index <= front_index:
                 continue
             interval = rear_index - front_index
-            payload_symbols = max(0, int(round((interval - _MIN_CHIRP_INTERVAL) / L)))
-            nominal = _MIN_CHIRP_INTERVAL + payload_symbols * L
-            interval_sfo = interval / nominal - 1.0
-            if abs(interval_sfo) <= _MAX_SFO:
+            minimum = int(round(_MIN_CHIRP_INTERVAL * (1.0 - _MAX_SFO)))
+            if interval >= minimum:
                 score = float(np.sqrt(front_score * rear_score))
-                pairs.append((score, front_index, rear_index, interval_sfo))
+                pairs.append((score, front_index, rear_index))
     if not pairs:
         raise SyncError("chirp", "no compatible front/rear chirp pair")
     return max(pairs, key=lambda item: item[0])
+
+
+def _scaled_chirp(sfo):
+    reference = linear_chirp()
+    count = int(round(reference.size * (1.0 + sfo)))
+    positions = np.arange(count, dtype=float) / (1.0 + sfo)
+    return np.interp(positions, np.arange(reference.size), reference)
+
+
+def _complete_chirp(samples, approximate_start, sfo):
+    reference = _scaled_chirp(sfo)
+    lo = max(0, approximate_start - _CHIRP_REFINE_RADIUS)
+    hi = min(samples.size, approximate_start + reference.size + _CHIRP_REFINE_RADIUS)
+    scores = _normalized_correlation(samples[lo:hi], reference)
+    if scores.size == 0:
+        raise SyncError("chirp", "complete chirp window is truncated")
+    offset = int(np.argmax(scores))
+    score = float(scores[offset])
+    if score < _CHIRP_THRESHOLD:
+        raise SyncError("chirp", f"complete chirp score {score:.3f} is too low")
+    return lo + offset, score
+
+
+def _validate_chirp_interval(front_start, rear_start, sfo):
+    interval = rear_start - front_start
+    minimum = _MIN_CHIRP_INTERVAL * (1.0 + sfo)
+    if interval < round(minimum):
+        raise SyncError("chirp", "complete chirp pair is shorter than a standard frame")
+    payload_symbols = int(round((interval - minimum) / (L * (1.0 + sfo))))
+    expected = (_MIN_CHIRP_INTERVAL + payload_symbols * L) * (1.0 + sfo)
+    if payload_symbols < 0 or abs(interval - expected) > _TIMING_RADIUS:
+        raise SyncError("chirp", "complete chirp pair is off the payload symbol grid")
 
 
 def _interpolate(samples, positions):
@@ -187,6 +218,18 @@ def _training_start(samples, expected, sfo):
     return start, score
 
 
+def _coarse_training_sfo(samples, front_start):
+    scored = []
+    for candidate in np.arange(-_MAX_SFO, _MAX_SFO + _SFO_STEP / 2.0, _SFO_STEP):
+        expected = front_start + int(round((3 * FS + FS // 2) * (1.0 + candidate)))
+        score = _timing_score(samples, expected, float(candidate))
+        scored.append((score, float(candidate), expected))
+    score, sfo, expected = max(scored, key=lambda item: item[0])
+    if score < _TRAINING_THRESHOLD:
+        raise SyncError("training", f"coarse frequency-domain training score {score:.3f} is too low")
+    return sfo, expected
+
+
 def _phase_fit_sfo(products, coarse_sfo):
     cross = np.sum(products[1:] * np.conj(products[:-1]), axis=0)
     weights = np.abs(cross)
@@ -205,16 +248,11 @@ def _phase_fit_sfo(products, coarse_sfo):
     return float(refined)
 
 
-def _estimate_sfo(samples, training_start, interval_sfo):
-    centers = np.arange(-_MAX_SFO, _MAX_SFO + _SFO_STEP / 2.0, _SFO_STEP)
-    centers = np.unique(np.append(centers, np.clip(interval_sfo, -_MAX_SFO, _MAX_SFO)))
-    scored = []
-    for candidate in centers:
-        score, products = _frequency_score(
-            _training_observations(samples, training_start, float(candidate))
-        )
-        scored.append((score, float(candidate), products))
-    coarse_score, coarse_sfo, products = max(scored, key=lambda item: item[0])
+def _estimate_sfo(samples, training_start, coarse_hint):
+    coarse_sfo = float(np.clip(coarse_hint, -_MAX_SFO, _MAX_SFO))
+    coarse_score, products = _frequency_score(
+        _training_observations(samples, training_start, coarse_sfo)
+    )
     if products is None or coarse_score < _TRAINING_THRESHOLD:
         raise SyncError("sfo", f"coarse SFO score {coarse_score:.3f} is too low")
     refined_sfo = _phase_fit_sfo(products, coarse_sfo)
@@ -228,12 +266,15 @@ def _estimate_sfo(samples, training_start, interval_sfo):
 
 def synchronize(samples):
     x = _mono_samples(samples)
-    chirp_score, front_start, _, interval_sfo = _compatible_pair(x)
-    expected_training = front_start + int(round((3 * FS + FS // 2) * (1.0 + interval_sfo)))
-    training_start, timing_score = _training_start(x, expected_training, interval_sfo)
-    sfo, sfo_score = _estimate_sfo(x, training_start, interval_sfo)
+    chirp_score, front_start, rear_start = _compatible_pair(x)
+    coarse_sfo, expected_training = _coarse_training_sfo(x, front_start)
+    training_start, timing_score = _training_start(x, expected_training, coarse_sfo)
+    sfo, sfo_score = _estimate_sfo(x, training_start, coarse_sfo)
+    front_start, front_chirp_score = _complete_chirp(x, front_start, sfo)
+    rear_start, rear_chirp_score = _complete_chirp(x, rear_start, sfo)
+    _validate_chirp_interval(front_start, rear_start, sfo)
     payload_start = training_start + int(round(8 * L * (1.0 + sfo)))
-    score = min(chirp_score, timing_score, sfo_score)
+    score = min(chirp_score, front_chirp_score, rear_chirp_score, timing_score, sfo_score)
     return SyncResult(front_start, training_start, payload_start, sfo, float(score))
 
 
