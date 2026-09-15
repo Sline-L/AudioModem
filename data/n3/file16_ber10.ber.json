@@ -1,0 +1,13 @@
+{
+  "profile": "n3_example_tx",
+  "input": "data\\source\\file16_test.txt",
+  "out": "data\\n3\\file16_ber10.wav",
+  "coded_symbols": 18,
+  "requested_ber": 0.1,
+  "injected_bit_errors": 6773,
+  "payload_coded_bits": 67728,
+  "actual_ber": 0.10000295298842428,
+  "seed": 20260913,
+  "header_untouched": true,
+  "training_untouched": true
+}

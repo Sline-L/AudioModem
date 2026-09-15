@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.signal import fftconvolve
 
-from .modem import CP, FS, K0, K1, L, N, linear_chirp, training_symbols
+from .modem import CP, FS, K0, K1, L, N, linear_chirp, ofdm_time, training_symbols
 
 
 _FRONT_TRAINING = training_symbols()[:8, K0:K1 + 1]
@@ -19,6 +19,7 @@ _MIN_CHIRP_INTERVAL = 4 * FS + 16 * L
 # Integer chirp-index quantization plus fitted-SFO error measured 0.562 sample
 # at -25 ppm. A 0.75 bound covers it but rejects an actual one-sample advance.
 _MIN_INTERVAL_TOLERANCE_SAMPLES = 0.75
+_MAX_FRAME_CANDIDATES = 4
 
 
 @dataclass(frozen=True)
@@ -297,6 +298,84 @@ def synchronize(samples, strict=True):
     payload_start = training_start + int(round(8 * L * (1.0 + sfo)))
     score = min(chirp_score, front_chirp_score, rear_chirp_score, timing_score, sfo_score)
     return SyncResult(front_start, rear_start, training_start, payload_start, sfo, float(score))
+
+
+def _training_candidates(samples, limit):
+    """Return separated starts for the standard eight-symbol front training."""
+    template = ofdm_time(_FRONT_TRAINING).ravel()
+    scores = _normalized_correlation(samples, template)
+    work = scores.copy()
+    candidates = []
+    for _ in range(limit):
+        if work.size == 0:
+            break
+        start = int(np.argmax(work))
+        score = float(work[start])
+        candidates.append((start, score))
+        lo = max(0, start - L // 2)
+        hi = min(work.size, start + L // 2 + 1)
+        work[lo:hi] = 0.0
+    return candidates
+
+
+def _training_sfo_candidates(samples, training_start):
+    """Keep several clock hypotheses; a phase fit is only one such hypothesis."""
+    grid = np.arange(-200.0, 201.0, 25.0) * 1e-6
+    scored = [
+        (_frequency_score(_training_observations(samples, training_start, float(sfo)))[0], float(sfo))
+        for sfo in grid
+    ]
+    # A direct training-coherence maximum is more reliable than a phase fit on
+    # recordings with multipath.  Additional candidates come from independent
+    # training peaks, rather than multiplying a weak hypothesis many times.
+    best = sorted(scored, reverse=True)[:1]
+    unique = []
+    for score, sfo in sorted(best, reverse=True):
+        if not any(abs(sfo - previous) < 1e-9 for _, previous in unique):
+            unique.append((float(score), float(sfo)))
+    return unique
+
+
+def frame_candidates(samples, limit=_MAX_FRAME_CANDIDATES):
+    """Rank independent standard-frame hypotheses without trusting a single chirp.
+
+    Candidate construction uses both chirps and the known eight training symbols.
+    The receiver validates candidates later with the protected Header CRC, so a
+    damaged or truncated trailing chirp cannot select an arbitrary frame.
+    """
+    x = _mono_samples(samples)
+    chirps = _chirp_candidates(x, strict=False)
+    candidates = []
+    training_peaks = _training_candidates(x, limit)
+    if (not chirps or max(score for _, score in chirps) == 0.0) and (
+        not training_peaks or training_peaks[0][1] == 0.0
+    ):
+        raise SyncError("chirp", "no chirp or standard training candidate")
+    for training_start, training_score in training_peaks:
+        front_start = max(0, training_start - (3 * FS + FS // 2))
+        nearby = [item for item in chirps if abs(item[0] - front_start) <= 2 * CP]
+        if nearby:
+            front_start, chirp_score = max(nearby, key=lambda item: item[1])
+        else:
+            chirp_score = 0.0
+        rear_start = next((index for index, _ in chirps if index > training_start), training_start)
+        for frequency_score, sfo in _training_sfo_candidates(x, training_start):
+            payload_start = training_start + int(round(8 * L * (1.0 + sfo)))
+            score = 0.5 * training_score + 0.5 * frequency_score
+            candidates.append(SyncResult(
+                int(front_start), int(rear_start), int(training_start), int(payload_start),
+                float(sfo), float(score + 0.05 * chirp_score),
+            ))
+    selected = []
+    for item in sorted(candidates, key=lambda value: value.score, reverse=True):
+        if not any(abs(item.training_start - previous.training_start) < CP // 4 and
+                   abs(item.sfo - previous.sfo) < 10e-6 for previous in selected):
+            selected.append(item)
+        if len(selected) >= limit:
+            break
+    if not selected:
+        raise SyncError("training", "no usable standard training candidate")
+    return selected
 
 
 def choose_channel(samples, strict=True):

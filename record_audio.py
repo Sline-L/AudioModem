@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 DEFAULT_RATE = 48_000
-DEFAULT_CHANNELS = 1
+DEFAULT_CHANNELS = 2
 DEFAULT_SAMPLE_COUNT = 400_000
 
 
@@ -45,7 +45,7 @@ def positive_float(value: str) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="使用麦克风录制 WAV（固定为 48 kHz、单声道、s16）。"
+        description="使用麦克风录制 WAV（固定为 48 kHz、双声道、s16）。"
     )
     parser.add_argument("output", nargs="?", type=Path, help="输出 WAV 文件路径")
     duration = parser.add_mutually_exclusive_group()

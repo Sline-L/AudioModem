@@ -142,7 +142,7 @@ def test_low_confidence_chirp_still_recovers_candidate_payload(standard, tmp_pat
     assert recovered.read_bytes() == source.read_bytes()
     metrics = json.loads((out / "metrics.json").read_text())
     assert metrics["verified"] is False
-    assert metrics["strict_stage"] == "chirp"
+    assert metrics["strict_stage"] == "candidate"
 
 
 def test_recorded_r1_recovers_with_independent_robust_receiver(tmp_path):
@@ -152,3 +152,22 @@ def test_recorded_r1_recovers_with_independent_robust_receiver(tmp_path):
     assert wav.exists() and source.exists()
     recovered = receiver.run_rx(wav, tmp_path / "r1", source)
     assert recovered.read_bytes() == source.read_bytes()
+
+
+def test_recorded_r5_recovers_by_header_selected_candidate(tmp_path):
+    receiver = load_receiver()
+    wav = Path("data/n3_2/r5.wav")
+    recovered = receiver.run_rx(wav, tmp_path / "r5")
+    assert recovered.name == "duck_image_34k.tiff"
+    assert recovered.stat().st_size == 34685
+
+
+def test_recorded_r4_persists_all_candidate_diagnostics(tmp_path):
+    receiver = load_receiver()
+    out = tmp_path / "r4"
+    with pytest.raises(receiver.DecodeError) as failure:
+        receiver.run_rx(Path("data/n3_2/r4.wav"), out)
+    assert failure.value.stage == "ldpc"
+    debug = json.loads((out / "header_debug.json").read_text())
+    assert len((out / "decoded_header.bin").read_bytes()) == 249
+    assert len(debug["candidate_attempts"]) >= 4

@@ -36,7 +36,10 @@ TRAINING_PER_EDGE = 8
 def build_frame(source: bytes, name: str) -> tuple[np.ndarray, bytes, dict]:
     """Build the exact standard frame for *source* and its transmitted name."""
     source = bytes(source)
-    payload_symbols = math.ceil(len(source) / INFO_BYTES)
+    # The reference transmitter pads Header+payload to 498 bytes, then turns
+    # each 498-byte region into two independent 249-byte LDPC information
+    # blocks.  Header.payload_symbols describes only the payload side.
+    payload_symbols = math.ceil(2 * len(source) / CODE_BYTES)
     header = header_bytes(name, len(source), payload_symbols)
     stream = header + source
     stream += bytes((-len(stream)) % CODE_BYTES)

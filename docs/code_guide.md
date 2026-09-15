@@ -164,7 +164,7 @@ Important receiver options:
 ## 4. Record / 录音
 
 Install the recording dependency with `requirements.txt`, then record a WAV at
-the fixed format of 48 kHz, mono, signed 16-bit PCM:
+the fixed format of 48 kHz, stereo, signed 16-bit PCM:
 
 ```bash
 python record_audio.py data/n1/rec_n1_4.wav --sample-count 400000
