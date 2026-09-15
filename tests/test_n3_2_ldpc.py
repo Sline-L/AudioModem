@@ -12,7 +12,8 @@ def test_noiseless_ldpc_roundtrip_and_syndrome():
     assert coded.shape == (CODE_BITS,)
     assert coded.dtype == np.uint8
     assert not codec.syndrome(coded).any()
-    decoded, ok = codec.decode_llr((1 - 2 * coded.astype(float)) * 8)
+    scrambled = scramble_bits(coded)
+    decoded, ok = codec.decode_llr((1 - 2 * scrambled.astype(float)) * 8)
     assert ok and np.array_equal(decoded, info)
 
 

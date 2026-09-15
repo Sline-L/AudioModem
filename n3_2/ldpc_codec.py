@@ -51,14 +51,7 @@ class StandardLdpc:
     def decode_llr(self, scrambled_llr: np.ndarray) -> tuple[np.ndarray, bool]:
         llr = _llrs(scrambled_llr)
         descrambled = llr * (1.0 - 2.0 * self._scrambler)
-        primary = self._decode(descrambled)
-
-        # The public contract is scrambled LLRs.  Retaining the raw candidate also
-        # makes noiseless codeword diagnostics usable without a separate API.
-        raw = self._decode(llr)
-        primary_score = float(np.dot(llr, 1.0 - 2.0 * scramble_bits(primary)))
-        raw_score = float(np.dot(llr, 1.0 - 2.0 * raw))
-        decoded = primary if primary_score >= raw_score else raw
+        decoded = self._decode(descrambled)
         return decoded[:INFO_BITS].astype(np.uint8, copy=False), not self.syndrome(decoded).any()
 
     def syndrome(self, bits: np.ndarray) -> np.ndarray:
