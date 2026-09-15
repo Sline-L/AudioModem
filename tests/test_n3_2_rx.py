@@ -2,6 +2,7 @@ import importlib
 import json
 import wave
 import zlib
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -142,3 +143,12 @@ def test_low_confidence_chirp_still_recovers_candidate_payload(standard, tmp_pat
     metrics = json.loads((out / "metrics.json").read_text())
     assert metrics["verified"] is False
     assert metrics["strict_stage"] == "chirp"
+
+
+def test_recorded_r1_recovers_with_independent_robust_receiver(tmp_path):
+    receiver = load_receiver()
+    wav = Path("data/n3_2/r1.wav")
+    source = Path("data/source/cute.jpg")
+    assert wav.exists() and source.exists()
+    recovered = receiver.run_rx(wav, tmp_path / "r1", source)
+    assert recovered.read_bytes() == source.read_bytes()

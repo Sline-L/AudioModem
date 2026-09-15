@@ -31,6 +31,7 @@ class ChannelChoice:
 @dataclass(frozen=True)
 class SyncResult:
     start: int
+    rear_start: int
     training_start: int
     payload_start: int
     sfo: float
@@ -295,7 +296,7 @@ def synchronize(samples, strict=True):
         _validate_chirp_interval(front_start, rear_start, sfo)
     payload_start = training_start + int(round(8 * L * (1.0 + sfo)))
     score = min(chirp_score, front_chirp_score, rear_chirp_score, timing_score, sfo_score)
-    return SyncResult(front_start, training_start, payload_start, sfo, float(score))
+    return SyncResult(front_start, rear_start, training_start, payload_start, sfo, float(score))
 
 
 def choose_channel(samples, strict=True):

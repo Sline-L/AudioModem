@@ -115,8 +115,11 @@ def _receive(path, source, state):
         valid = np.abs(h) > max(float(np.max(np.abs(h))) * 1e-8, 1e-12)
         if not np.any(valid):
             raise ValueError("training channel estimate has no usable carriers")
-        residual = (y[:, valid] - training[:, valid] * h[valid]) / h[valid]
-        noise_var = max(float(np.mean(np.abs(residual) ** 2)), 1e-3)
+        residual = y - training * h
+        carrier_noise = np.mean(np.abs(residual) ** 2, axis=0) / np.maximum(np.abs(h) ** 2, 1e-12)
+        noise_var = max(float(np.median(carrier_noise[valid])), 1e-3)
+        reliability = noise_var / np.maximum(carrier_noise, 1e-12)
+        llr_scale = 3.0 * np.clip(np.sqrt(reliability), 0.25, 4.0)
         metrics["noise_var"] = noise_var
 
         stage = "ldpc"
@@ -125,7 +128,10 @@ def _receive(path, source, state):
         coded = _observations(samples, first, sync.sfo, 1)[0]
         equalized = np.zeros_like(coded)
         np.divide(coded, h, out=equalized, where=valid)
-        llr = np.clip(qpsk_llr(equalized, noise_var), -30.0, 30.0)
+        llr = np.empty(2 * equalized.size, dtype=float)
+        llr[0::2] = equalized.imag * llr_scale
+        llr[1::2] = equalized.real * llr_scale
+        llr = np.clip(llr, -30.0, 30.0)
         bits, ok = StandardLdpc().decode_llr(llr)
         state["raw"] = np.packbits(bits, bitorder="big").tobytes()
         state["debug"]["ldpc_ok"] = bool(ok)
@@ -145,7 +151,8 @@ def _receive(path, source, state):
             raise ValueError("Header filename is empty")
         metrics.update(stage="header_ok", header_ok=True, **header)
         state["debug"]["header"] = header
-        state.update(samples=samples, sync=sync, h=h, noise_var=noise_var)
+        state.update(samples=samples, sync=sync, h=h, noise_var=noise_var,
+                     llr_scale=llr_scale, front_training=y)
         return header, metrics
     except (SyncError, OSError, ValueError, RuntimeError, wave.Error, EOFError) as exc:
         if isinstance(exc, SyncError):
@@ -181,15 +188,39 @@ def _write_diagnostics(out, state):
 
 def _decode_payload(header, state):
     sync, h = state["sync"], state["h"]
-    valid = np.abs(h) > max(float(np.max(np.abs(h))) * 1e-8, 1e-12)
-    start = sync.training_start + 9 * L * (1.0 + sync.sfo)
-    observed = _observations(state["samples"], start, sync.sfo, header["payload_symbols"])
+    # Header tells us the exact data-block count, so tail training can now be
+    # placed on the OFDM grid without guessing it during synchronization.
+    total_blocks = 2 * ((249 + header["size"] + 497) // 498)
+    tail_known = training_symbols()[8:, K0:K1 + 1]
+    front_known = training_symbols()[:8, K0:K1 + 1]
+    joint_known = np.vstack((front_known, tail_known))
+    candidates = []
+    for candidate_sfo in sync.sfo + np.arange(-5.0, 5.1, 0.5) * 1e-6:
+        front = _observations(state["samples"], sync.training_start, candidate_sfo, 8)
+        tail_start = sync.training_start + (8 + total_blocks) * L * (1.0 + candidate_sfo)
+        tail = _observations(state["samples"], tail_start, candidate_sfo, 8)
+        joint = np.vstack((front, tail))
+        candidate_h = (joint / joint_known).mean(axis=0)
+        error = np.mean(np.abs(joint - joint_known * candidate_h) ** 2, axis=0)
+        score = float(np.median(error / np.maximum(np.abs(candidate_h) ** 2, 1e-12)))
+        candidates.append((score, float(candidate_sfo), candidate_h, error))
+    _, payload_sfo, h, error = min(candidates, key=lambda item: item[0])
+    carrier_noise = error / np.maximum(np.abs(h) ** 2, 1e-12)
+    base = max(float(np.median(carrier_noise)), 1e-3)
+    scale = 3.0 * np.clip(np.sqrt(base / np.maximum(carrier_noise, 1e-12)), 0.25, 4.0)
+    start = sync.training_start + 9 * L * (1.0 + payload_sfo)
+    observed = _observations(state["samples"], start, payload_sfo, header["payload_symbols"])
     equalized = np.zeros_like(observed)
+    valid = np.abs(h) > max(float(np.max(np.abs(h))) * 1e-8, 1e-12)
     np.divide(observed, h, out=equalized, where=valid)
+    state["metrics"]["payload_sfo"] = payload_sfo
     codec = StandardLdpc()
     blocks = []
     for index, symbol in enumerate(equalized):
-        llr = np.clip(qpsk_llr(symbol, state["noise_var"]), -30.0, 30.0)
+        llr = np.empty(2 * symbol.size, dtype=float)
+        llr[0::2] = symbol.imag * scale
+        llr[1::2] = symbol.real * scale
+        llr = np.clip(llr, -30.0, 30.0)
         bits, ok = codec.decode_llr(llr)
         if not ok:
             raise ValueError(f"payload block {index} LDPC parity check failed")
