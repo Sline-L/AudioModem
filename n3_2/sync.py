@@ -16,6 +16,9 @@ _SFO_STEP = 0.00005
 _TIMING_RADIUS = CP
 _TIMING_STEP = 32
 _MIN_CHIRP_INTERVAL = 4 * FS + 16 * L
+# Integer chirp-index quantization plus fitted-SFO error measured 0.562 sample
+# at -25 ppm. A 0.75 bound covers it but rejects an actual one-sample advance.
+_MIN_INTERVAL_TOLERANCE_SAMPLES = 0.75
 
 
 @dataclass(frozen=True)
@@ -132,14 +135,11 @@ def _complete_chirp(samples, approximate_start, sfo):
 def _validate_chirp_interval(front_start, rear_start, sfo):
     interval = rear_start - front_start
     minimum = _MIN_CHIRP_INTERVAL * (1.0 + sfo)
-    # Chirp starts are integer samples while fitted SFO is continuous. Reuse
-    # the CP-sized symbol-grid residual budget so the boundary checks agree.
-    interval_tolerance = _TIMING_RADIUS
-    if interval < minimum - interval_tolerance:
+    if interval < minimum - _MIN_INTERVAL_TOLERANCE_SAMPLES:
         raise SyncError("chirp", "complete chirp pair is shorter than a standard frame")
     payload_symbols = int(round((interval - minimum) / (L * (1.0 + sfo))))
     expected = (_MIN_CHIRP_INTERVAL + payload_symbols * L) * (1.0 + sfo)
-    if payload_symbols < 0 or abs(interval - expected) > interval_tolerance:
+    if payload_symbols < 0 or abs(interval - expected) > _TIMING_RADIUS:
         raise SyncError("chirp", "complete chirp pair is off the payload symbol grid")
 
 

@@ -73,3 +73,13 @@ def test_sync_accepts_negative_sfo_at_minimum_frame_interval():
     compressed = resample_poly(known_standard_frame(payload_symbols=0), 39999, 40000)
     result = synchronize(compressed)
     assert result.sfo == pytest.approx(-1 / 40000, abs=3e-6)
+
+
+@pytest.mark.parametrize("advance", [1, 1000])
+def test_sync_rejects_complete_rear_chirp_before_minimum_interval(advance):
+    frame = known_standard_frame(payload_symbols=0)
+    rear_start = len(frame) - 3 * FS
+    shifted = np.delete(frame, slice(rear_start - advance, rear_start))
+    with pytest.raises(SyncError) as caught:
+        synchronize(shifted)
+    assert caught.value.stage == "chirp"
