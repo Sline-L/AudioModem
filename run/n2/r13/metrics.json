@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r13.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r13",
+  "ok": true,
+  "stage": "ok",
+  "sync_start": 265093.7020282997,
+  "sync_score": 2115.059290960485,
+  "clock_status": "preamble",
+  "clock_scale": 0.9999915163550315,
+  "clock_error_ppm": -8.483644968471094,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 236,
+  "residual_delay_samples": null,
+  "mean_abs_h": 6.556193340202544,
+  "median_training_noise": 3.0000000000686016,
+  "median_abs_llr": 3.087210365819523,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "cute.m4a",
+    "file_size": 58339,
+    "declared_symbols": 235,
+    "K": 236,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 235,
+  "blocks_total": 235,
+  "payload_complete": true,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "cute.m4a",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r13\\cute.m4a",
+  "file_size": 58339,
+  "error": "",
+  "capture": {
+    "ok": true,
+    "snr1": 245547.06294369162,
+    "snr2": 216377.92173294481,
+    "peak1": 97094.00578029933,
+    "peak2": 2869550.9272254254
+  },
+  "lock": {
+    "start": 265093.7020282997,
+    "peak_energy": 27.337912501017268,
+    "snr": 2115.059290960485,
+    "integer": 265094,
+    "frac": -0.2979717003181577
+  },
+  "end": {
+    "K": 236,
+    "end_offset": 2498538.4046102315,
+    "snr": 3511.1152075239347,
+    "n_sym_raw": 243.99789107521792
+  }
+}

@@ -1,0 +1,6 @@
+mean |H_front|=2.5871  metrics mean_abs_h=2.3425
+payload symbol 0 iters=6 median|LLR|=2.8901
+first 249 file bytes match cute.jpg = True
+clock_error_ppm 是搜头阶段的钟偏；metrics.json 没有单独的 payload_ppm 字段
+mean_abs_h 来自联合 H，这里打印的是前训练 H，两者接近但不要求相等
+OK

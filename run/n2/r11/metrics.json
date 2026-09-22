@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r11.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r11",
+  "ok": false,
+  "stage": "ldpc",
+  "sync_start": 246652.3236128501,
+  "sync_score": 1680.0411162572448,
+  "clock_status": "preamble",
+  "clock_scale": 0.9999925870599697,
+  "clock_error_ppm": -7.412940030260273,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 236,
+  "residual_delay_samples": null,
+  "mean_abs_h": 6.886347286441502,
+  "median_training_noise": 3.000000145091916,
+  "median_abs_llr": 3.034780698631289,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "cute.m4a",
+    "file_size": 58339,
+    "declared_symbols": 235,
+    "K": 236,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 234,
+  "blocks_total": 235,
+  "payload_complete": false,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "cute.m4a",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r11\\cute.m4a",
+  "file_size": 58339,
+  "error": "部分 LDPC 码字未收敛，已按帧头长度写出文件",
+  "capture": {
+    "ok": true,
+    "snr1": 213844.66751473222,
+    "snr2": 242036.53005605942,
+    "peak1": 78652.81757369965,
+    "peak2": 2851112.0602123938
+  },
+  "lock": {
+    "start": 246652.3236128501,
+    "peak_energy": 20.24322600694138,
+    "snr": 1680.0411162572448,
+    "integer": 246652,
+    "frac": 0.323612850101199
+  },
+  "end": {
+    "K": 236,
+    "end_offset": 2498541.6631907914,
+    "snr": 2675.469940599974,
+    "n_sym_raw": 243.99820929597573
+  }
+}

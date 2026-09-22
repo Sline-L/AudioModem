@@ -1,0 +1,17 @@
+chirp max abs diff = 0.000e+00
+lfsr[64] equal = True
+train freq max abs diff = 0.000e+00
+train time max abs diff = 0.000e+00
+train freq shape = (16, 8192), time shape = (16, 10240)
+CPython random.seed(80) first 8 = [2, 3, 3, 2, 2, 3, 2, 0]
+NumPy default_rng(80) first 8 = [3, 2, 0, 0, 2, 0, 1, 2]
+RNG sequences differ = True
+header len = 249
+hex[0:40] = 504800000003e80000000573747564795f6e616d655f32305f63686172732100f9536fe100000000
+parse filename='study_name_20_chars!' size=1000 decl=5
+filename bytes at [11:31]
+0x00 at index 31 value=0
+CRC 4 bytes at [32:36] = f9536fe1
+flip filename byte -> parse is None: True
+flip byte after CRC -> still parses: True
+OK

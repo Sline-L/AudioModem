@@ -1,0 +1,45 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r1.wav",
+  "out": "G:\\OFDM_gerson\\run\\n1\\r1",
+  "stage": "done",
+  "error": "",
+  "chirp_peaks": [
+    44916,
+    830836
+  ],
+  "body_start": 212866.10522376362,
+  "timing_peak": 7.7848494753736786,
+  "K": 42,
+  "sfo": 0.999988504548532,
+  "clock_error_ppm": -11.495451467946616,
+  "cfo_hz": -0.012101998557593682,
+  "timing_offset": -256,
+  "residual_delay_samples": -0.8846117179407731,
+  "noise_var": 0.07751372041689561,
+  "train_mse": 0.7446513863233416,
+  "mean_abs_h": 2.6078616183118424,
+  "median_abs_llr": 5.958580384729055,
+  "eq_mse_hard": 0.4078655698343543,
+  "turbo": false,
+  "header_ok": true,
+  "header_offset": 0,
+  "header": {
+    "version": 0,
+    "file_size": 9829,
+    "symbol_count": 40,
+    "filename": "cute.jpg",
+    "header_info_bytes": 249,
+    "crc_ok": true
+  },
+  "recovered_name": "cute.jpg",
+  "recovered_path": "G:\\OFDM_gerson\\run\\n1\\r1\\cute.jpg",
+  "file_match": true,
+  "source": "G:\\OFDM_gerson\\source\\cute.jpg",
+  "profile": {
+    "N": 8192,
+    "CP": 2048,
+    "chunk_size": 498,
+    "ldpc": "802.16 rate=1/2 z=166",
+    "modulation": "QPSK Hermitian"
+  }
+}

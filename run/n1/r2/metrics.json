@@ -1,0 +1,38 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r2.wav",
+  "out": "G:\\OFDM_gerson\\run\\n1\\r2",
+  "stage": "LDPC",
+  "error": "ValueError: 未找到 CRC 通过的 PH 文件头",
+  "chirp_peaks": [
+    99738,
+    2319258
+  ],
+  "body_start": 275729.9321497733,
+  "timing_peak": 0.1718766965272497,
+  "K": 195,
+  "sfo": 0.9992803887903196,
+  "clock_error_ppm": -719.6112096804486,
+  "cfo_hz": -0.8304380985426545,
+  "timing_offset": -256,
+  "residual_delay_samples": 346.7287934646043,
+  "noise_var": 20.12076854765767,
+  "train_mse": 19.79383921775635,
+  "mean_abs_h": 0.3783277371568215,
+  "median_abs_llr": 4.920758461657048,
+  "eq_mse_hard": 1.9032457429474865,
+  "turbo": true,
+  "header_ok": false,
+  "header_offset": null,
+  "header": null,
+  "recovered_name": "",
+  "recovered_path": null,
+  "file_match": null,
+  "source": null,
+  "profile": {
+    "N": 8192,
+    "CP": 2048,
+    "chunk_size": 498,
+    "ldpc": "802.16 rate=1/2 z=166",
+    "modulation": "QPSK Hermitian"
+  }
+}

@@ -1,0 +1,12 @@
+peak1=44926.070  metrics=44926.070
+peak2=830837.035
+coarse=peak1+144000+24000=212926.070
+lock.start=212925.047  snr=7270.6
+coarse-lock samples=1.023
+end_offset=511993.957  n_sym_raw=49.999410  K=42
+metrics K=42 n_sym_raw=49.999410
+|sfo|=1.165e-05 over 58 symbols accumulates 6.92 samples
+front residual (true sfo)=9.3690e-02
+tail residual (true sfo)=7.0485e-01
+tail residual (sfo=0)=4.5234e+00
+OK

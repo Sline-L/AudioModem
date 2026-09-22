@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r6.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r6",
+  "ok": false,
+  "stage": "ldpc",
+  "sync_start": 205678.8496293107,
+  "sync_score": 3285.5797063080577,
+  "clock_status": "preamble",
+  "clock_scale": 0.9999953263453907,
+  "clock_error_ppm": -4.673654609321787,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 156,
+  "residual_delay_samples": null,
+  "mean_abs_h": 1.1156810937631916,
+  "median_training_noise": 3.000000000383686,
+  "median_abs_llr": 3.078435448711487,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "111.tiff",
+    "file_size": 38583,
+    "declared_symbols": 155,
+    "K": 156,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 114,
+  "blocks_total": 155,
+  "payload_complete": false,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "111.tiff",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r6\\111.tiff",
+  "file_size": 38583,
+  "error": "部分 LDPC 码字未收敛，已按帧头长度写出文件",
+  "capture": {
+    "ok": true,
+    "snr1": 121186.45195752103,
+    "snr2": 109563.94020802152,
+    "peak1": 37679.039907001075,
+    "peak2": 1990950.0623831293
+  },
+  "lock": {
+    "start": 205678.8496293107,
+    "peak_energy": 1.0591623861854311,
+    "snr": 3285.5797063080577,
+    "integer": 205679,
+    "frac": -0.1503706893126946
+  },
+  "end": {
+    "K": 156,
+    "end_offset": 1679352.0210554246,
+    "snr": 4890.395678943276,
+    "n_sym_raw": 163.99922080619382
+  }
+}

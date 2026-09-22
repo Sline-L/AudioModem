@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r14.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r14",
+  "ok": true,
+  "stage": "ok",
+  "sync_start": 218933.9761105551,
+  "sync_score": 15403.995723820579,
+  "clock_status": "preamble",
+  "clock_scale": 0.9999885006399543,
+  "clock_error_ppm": -11.49936004579688,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 40,
+  "residual_delay_samples": null,
+  "mean_abs_h": 6.400190779070898,
+  "median_training_noise": 3.000000399045125,
+  "median_abs_llr": 2.959669024040183,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "picture_1.jpg",
+    "file_size": 9693,
+    "declared_symbols": 39,
+    "K": 40,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 39,
+  "blocks_total": 39,
+  "payload_complete": true,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "picture_1.jpg",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r14\\picture_1.jpg",
+  "file_size": 9693,
+  "error": "",
+  "capture": {
+    "ok": true,
+    "snr1": 446441.37506817654,
+    "snr2": 336886.9493271178,
+    "peak1": 50942.044704570966,
+    "peak2": 816373.8117939319
+  },
+  "lock": {
+    "start": 218933.9761105551,
+    "peak_energy": 217.19468962517468,
+    "snr": 15403.995723820579,
+    "integer": 218934,
+    "frac": -0.023889444913947955
+  },
+  "end": {
+    "K": 40,
+    "end_offset": 491513.9823541932,
+    "snr": 16924.50683177354,
+    "n_sym_raw": 47.99941233927668
+  }
+}

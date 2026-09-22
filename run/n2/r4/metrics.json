@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r4.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r4",
+  "ok": false,
+  "stage": "ldpc",
+  "sync_start": 291682.94603165926,
+  "sync_score": 2270.9667968370272,
+  "clock_status": "preamble",
+  "clock_scale": 1.0000279928622657,
+  "clock_error_ppm": 27.992862265735496,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 142,
+  "residual_delay_samples": null,
+  "mean_abs_h": 1.726028930833429,
+  "median_training_noise": 3.0000000031512974,
+  "median_abs_llr": 3.1717437775209487,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "duck_image_34k.tiff",
+    "file_size": 34685,
+    "declared_symbols": 140,
+    "K": 142,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 67,
+  "blocks_total": 141,
+  "payload_complete": false,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "duck_image_34k.tiff",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r4\\duck_image_34k.tiff",
+  "file_size": 34685,
+  "error": "部分 LDPC 码字未收敛，已按帧头长度写出文件",
+  "capture": {
+    "ok": true,
+    "snr1": 60023.38457929243,
+    "snr2": 135.17654847698745,
+    "peak1": 123681.97085938923,
+    "peak2": 637810.1703236721
+  },
+  "lock": {
+    "start": 291682.94603165926,
+    "peak_energy": 2.0149112640552906,
+    "snr": 2270.9667968370272,
+    "integer": 291683,
+    "frac": -0.053968340740539134
+  },
+  "end": {
+    "K": 142,
+    "end_offset": 1536042.9970364403,
+    "snr": 2161.9611790584613,
+    "n_sym_raw": 150.00419892933988
+  }
+}

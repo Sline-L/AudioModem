@@ -1,0 +1,50 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r9.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r9",
+  "ok": false,
+  "stage": "header",
+  "sync_start": 209030.92849919994,
+  "sync_score": 2281.226599202589,
+  "clock_status": "preamble",
+  "clock_scale": 0.9994490267852928,
+  "clock_error_ppm": -550.9732147072066,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": null,
+  "K": 236,
+  "residual_delay_samples": null,
+  "mean_abs_h": null,
+  "median_training_noise": null,
+  "median_abs_llr": null,
+  "turbo": false,
+  "header_ok": false,
+  "header": null,
+  "blocks_ok": 0,
+  "blocks_total": 0,
+  "file_crc_ok": false,
+  "file_match": null,
+  "source_path": null,
+  "recovered_name": "recovered.bin.partial",
+  "file_size": 0,
+  "error": "PH 头 CRC 未通过",
+  "capture": {
+    "ok": true,
+    "snr1": 342226.832357668,
+    "snr2": 337720.56011706317,
+    "peak1": 41031.11070942184,
+    "peak2": 2812062.044940972
+  },
+  "lock": {
+    "start": 209030.92849919994,
+    "peak_energy": 7.808415836577996,
+    "snr": 2281.226599202589,
+    "integer": 209031,
+    "frac": -0.07150080005521886
+  },
+  "end": {
+    "K": 236,
+    "end_offset": 2497112.619335054,
+    "snr": 3779.111336270431,
+    "n_sym_raw": 243.85865423193886
+  }
+}

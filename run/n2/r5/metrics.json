@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r5.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r5",
+  "ok": true,
+  "stage": "ok",
+  "sync_start": 311224.65293367865,
+  "sync_score": 11200.889064772453,
+  "clock_status": "preamble",
+  "clock_scale": 1.0000214314395497,
+  "clock_error_ppm": 21.4314395495796,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 142,
+  "residual_delay_samples": null,
+  "mean_abs_h": 0.9867141107194797,
+  "median_training_noise": 3.0000002540343473,
+  "median_abs_llr": 3.1030088299263276,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "duck_image_34k.tiff",
+    "file_size": 34685,
+    "declared_symbols": 140,
+    "K": 142,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 141,
+  "blocks_total": 141,
+  "payload_complete": true,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "duck_image_34k.tiff",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r5\\duck_image_34k.tiff",
+  "file_size": 34685,
+  "error": "",
+  "capture": {
+    "ok": true,
+    "snr1": 393444.1974792582,
+    "snr2": 408807.12535342044,
+    "peak1": 143225.44173526013,
+    "peak2": 1953184.1567843866
+  },
+  "lock": {
+    "start": 311224.65293367865,
+    "peak_energy": 2.517419761760625,
+    "snr": 11200.889064772453,
+    "integer": 311225,
+    "frac": -0.3470663213520311
+  },
+  "end": {
+    "K": 142,
+    "end_offset": 1536032.981612175,
+    "snr": 14872.79344167188,
+    "n_sym_raw": 150.00322086056397
+  }
+}

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>N2 接收机学习课本</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#161a21; --panel2:#1c222b; --line:#2a323d;
+  --fg:#dfe5ee; --dim:#98a3b3; --acc:#5aa9ff;
+  --a:#7ee0a5; --b:#ffc861; --c:#c39bff;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Cascadia Mono",monospace;
+}
+html[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#fff; --panel2:#eef1f5; --line:#d8dee7;
+  --fg:#1c222b; --dim:#5c6673; --acc:#0b66c3;
+  --a:#137a4a; --b:#8a5b00; --c:#6b3fb5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15.5px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+a{color:var(--acc)}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel2);
+  padding:.1em .35em;border-radius:4px}
+pre{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.6}
+pre code{background:none;padding:0}
+
+/* layout */
+.wrap{display:flex;min-height:100vh}
+nav{width:270px;flex:0 0 270px;background:var(--panel);border-right:1px solid var(--line);
+  position:sticky;top:0;height:100vh;overflow:auto;padding:18px 0 40px}
+nav h1{font-size:15px;margin:0 18px 4px;letter-spacing:.02em}
+nav .sub{font-size:12px;color:var(--dim);margin:0 18px 16px}
+nav a{display:block;padding:5px 18px;color:var(--dim);text-decoration:none;font-size:13.5px;
+  border-left:2px solid transparent}
+nav a:hover{color:var(--fg);background:var(--panel2)}
+nav a.on{color:var(--fg);border-left-color:var(--acc);background:var(--panel2)}
+nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);
+  margin:16px 18px 6px;opacity:.7}
+main{flex:1;min-width:0;padding:34px 46px 120px;max-width:1000px}
+
+/* header bar */
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.top h2{margin:0;font-size:27px;letter-spacing:.01em}
+.tools{margin-left:auto;display:flex;gap:8px}
+button{font:inherit;font-size:12.5px;padding:5px 11px;border-radius:999px;cursor:pointer;
+  background:var(--panel);color:var(--dim);border:1px solid var(--line)}
+button:hover{color:var(--fg)}
+button.on{color:#06121f;background:var(--acc);border-color:var(--acc);font-weight:600}
+html[data-theme="light"] button.on{color:#fff}
+
+section{margin:0 0 54px;scroll-margin-top:20px}
+section>h3{font-size:21px;margin:38px 0 6px;padding-top:8px;border-top:1px solid var(--line)}
+section>h3:first-child{border-top:none;margin-top:0}
+h4{font-size:16px;margin:26px 0 6px}
+p{margin:.7em 0}
+ul,ol{margin:.6em 0;padding-left:1.4em}
+li{margin:.3em 0}
+
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);font-weight:600}
+td code{white-space:nowrap}
+
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;
+  border:1px solid currentColor;vertical-align:2px;margin-left:8px;font-weight:600}
+.tag.a{color:var(--a)} .tag.b{color:var(--b)} .tag.c{color:var(--c)}
+.note{border-left:3px solid var(--acc);background:var(--panel);padding:10px 14px;
+  border-radius:0 8px 8px 0;margin:14px 0}
+.note b{color:var(--acc)}
+.warn{border-left-color:var(--b)} .warn b{color:var(--b)}
+.src{font-size:12px;color:var(--dim);font-family:var(--mono);margin:-8px 0 12px}
+.frame{display:flex;gap:4px;margin:16px 0;font-size:11.5px;text-align:center;
+  font-family:var(--mono);flex-wrap:nowrap;overflow:auto}
+.frame div{padding:8px 4px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);white-space:nowrap}
+.frame .ch{flex:0 0 118px} .frame .si{flex:0 0 64px}
+.frame .tr{flex:0 0 78px;background:color-mix(in srgb,var(--acc) 22%,var(--panel2));}
+.frame .dt{flex:1 1 auto;min-width:150px;background:color-mix(in srgb,var(--a) 22%,var(--panel2));}
+.pipe{display:grid;grid-template-columns:1fr;gap:6px;margin:16px 0}
+.pipe div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 13px;font-size:14px}
+.pipe div b{font-family:var(--mono);font-size:12.5px;font-weight:600}
+.kv{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.kv span{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:5px 10px;font-size:13px;font-family:var(--mono)}
+.kv span i{font-style:normal;color:var(--dim)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:12px 0}
+details summary{cursor:pointer;font-weight:600;font-size:14px}
+details[open] summary{margin-bottom:8px}
+.hidden{display:none !important}
+@media (max-width:860px){
+  nav{display:none} main{padding:22px 18px 80px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>N2 接收机学习课本</h1>
+  <p class="sub">声学 OFDM 接收端 · 三人分工</p>
+  <div class="grp">共同课</div>
+  <a href="#how">怎么用这份课本</a>
+  <a href="#ch0">第 0 章　全员共同课</a>
+  <div class="grp">分工精读</div>
+  <a href="#ch1">第 1 章　成员 A　空中接口</a>
+  <a href="#ch2">第 2 章　成员 B　捕获与对准</a>
+  <a href="#ch3">第 3 章　成员 C　信道与译码</a>
+  <div class="grp">合练</div>
+  <a href="#ch4">第 4 章　合练</a>
+  <div class="grp">附录</div>
+  <a href="#apa">A　主路径与库函数</a>
+  <a href="#apb">B　检查题答案要点</a>
+  <a href="#apc">C　术语</a>
+</nav>
+
+<main>
+<div class="top">
+  <h2>N2 接收机学习课本</h2>
+  <div class="tools">
+    <button id="fA" class="flt" data-m="a">只看 A</button>
+    <button id="fB" class="flt" data-m="b">只看 B</button>
+    <button id="fC" class="flt" data-m="c">只看 C</button>
+    <button id="fAll" class="flt on" data-m="">全部</button>
+    <button id="theme">浅色</button>
+  </div>
+</div>
+<p style="color:var(--dim);margin-top:0">
+以 <code>run/n2/r1</code> 的成功录音贯穿全书：<code>data/r1.wav</code> 解出 <code>cute.jpg</code>，9829 字节，<code>header_ok=true</code>，<code>file_match=true</code>。
+</p>
+
+<section id="how">
+<h3>怎么用这份课本</h3>
+<p>三人共用第 0 章。之后按分工精读：成员 A 第 1 章，成员 B 第 2 章，成员 C 第 3 章。每周碰头 40 分钟，由当周负责人按该章末尾的「讲解提纲」讲，另外两人只问接口。第 4 章一起做。</p>
+<p>学习时以 <code>n2/receiver.py</code> 里 <code>recover_array</code> 的实际调用为准。<code>DESIGN.md</code> 里的 Wiener、NLMS、Turbo 等函数写在 <code>channel.py</code>、<code>decode_path.py</code> 中，当前主路径没有调用它们。读到那些函数时，先标成「库函数」，确认主路径用到了再深挖（见<a href="#apa">附录 A</a>）。</p>
+<pre><code>cd g:\OFDM_gerson\n2
+python selftest.py
+python run_rx.py --wav ..\data\r1.wav --out-dir ..\run\n2\study_r1</code></pre>
+<p>成功看四件事：输出目录里有恢复文件、<code>header_ok=true</code>、<code>ldpc</code> 的收敛数等于总数、<code>file_match</code> 为 <code>true</code> 或 <code>n/a</code>。<code>n/a</code> 表示 <code>source/</code> 里没有同名原文件，不是失败。</p>
+<p>页面右上角的「只看 A / B / C」可以把不属于自己的章节收起来，准备讲解时用。</p>
+</section>
+
+<section id="ch0">
+<h3>第 0 章　全员共同课</h3>
+
+<h4>0.1 这条链路在做什么</h4>
+<p>发射端 <code>standard/example_tx.py</code> 把一个文件变成一段 48 kHz 的实信号 WAV。接收端 <code>n2</code> 把这段 WAV 变回原来的字节。空中接口以发射端为准：子载波位置、训练序列、QPSK 比特顺序、扰码、LDPC、帧头字段必须和发射端逐比特一致。同步、信道和译码调度可以换算法，换完之后仍要解开发射端生成的 WAV。</p>
+<div class="pipe">
+  <div><b>WAV</b></div>
+  <div>找前后 Chirp，用前 8 个训练符号锁住 OFDM 体起点　<span class="tag b">B</span></div>
+  <div>若干定时 / 钟偏候选上只解第 1 个数据符号，PH 头 CRC 通过者入选　<span class="tag b">B</span><span class="tag a">A</span></div>
+  <div>用前后训练把载荷钟偏收到 1 ppm　<span class="tag b">B</span></div>
+  <div>按该钟偏取出有效子载波，前后训练估计 H，沿符号插值　<span class="tag c">C</span></div>
+  <div>均衡、去公共相位、软 QPSK、解扰、LDPC　<span class="tag c">C</span></div>
+  <div>按帧头文件名和 <code>file_size</code> 写出文件　<span class="tag c">C</span><span class="tag a">A</span></div>
+</div>
+<p>编排函数是 <code>recover_array</code>。立体声在 <code>recover_from_channels</code> 里按能量从大到小逐路调用它，一路成功就停。</p>
+
+<h4>0.2 帧在时间上长什么样</h4>
+<div class="frame">
+  <div class="ch">线性扫频 3.0 s</div>
+  <div class="si">静音 0.5 s</div>
+  <div class="tr">8 训练</div>
+  <div class="dt">K 个数据符号</div>
+  <div class="tr">8 训练</div>
+  <div class="si">静音 0.5 s</div>
+  <div class="ch">线性扫频 3.0 s</div>
+</div>
+<p>函数名叫 <code>log_chirp_gen</code>，相位是线性调频：</p>
+<pre><code>phi = 2*pi*start_freq*t + t*t*pi*B/chirp_duration</code></pre>
+<p class="src">standard/example_tx.py:44</p>
+<p><code>f0=100 Hz</code>，<code>f1=20000 Hz</code>，<code>T=3.0 s</code>。采样网格是 <code>linspace(0, T, int(fs*T), endpoint=False)</code>。注释掉的对数扫频不得使用。</p>
+
+<h4>0.3 必须记住的数</h4>
+<p>这些数来自 <code>n2/params.py</code> 的 <code>derived()</code>。</p>
+<table>
+<tr><th>名字</th><th>值</th><th>含义</th></tr>
+<tr><td><code>sample_rate</code></td><td>48000</td><td>采样率</td></tr>
+<tr><td><code>N</code></td><td>8192</td><td>FFT 长度</td></tr>
+<tr><td><code>CP</code></td><td>2048</td><td>循环前缀</td></tr>
+<tr><td><code>symbol_len</code></td><td>10240</td><td>一个 OFDM 符号的样点数，<code>N+CP</code></td></tr>
+<tr><td><code>start_index</code></td><td>400</td><td>数据子载波起始 bin</td></tr>
+<tr><td><code>n_active</code></td><td>1992</td><td>数据子载波个数，<code>4×498</code></td></tr>
+<tr><td><code>end_index</code></td><td>2392</td><td>数据子载波结束 bin，不含</td></tr>
+<tr><td><code>chunk_size</code></td><td>498</td><td>一个码字的编码后字节数，也是一个数据符号承载的字节数</td></tr>
+<tr><td><code>info_bytes</code></td><td>249</td><td>一个码字的信息字节数</td></tr>
+<tr><td><code>ldpc_z</code></td><td>166</td><td><code>498/3</code></td></tr>
+<tr><td><code>preamble_count</code></td><td>8</td><td>前训练、后训练各 8 个</td></tr>
+<tr><td><code>chirp_len</code></td><td>144000</td><td><code>48000×3</code></td></tr>
+<tr><td><code>silence_len</code></td><td>24000</td><td><code>48000×0.5</code></td></tr>
+</table>
+<p>频点与 bin 的关系：<code>f = k × 48000 / 8192</code>。bin 400 约 2344 Hz，bin 2391 约 14010 Hz。声学通带大致在 2–14 kHz。</p>
+<p>一个数据符号的比特账：</p>
+<ul>
+<li>1992 个 QPSK × 2 bit = 3984 bit = 498 字节，这是一个 LDPC 码字。</li>
+<li>码率 1/2，信息部分 1992 bit = 249 字节。</li>
+<li>发射端先把「249 字节帧头 + 文件字节」补零到 498 的整数倍，再按 249 字节切块，每块编成一个 OFDM 符号。</li>
+</ul>
+<p>因此数据符号数 <code>K</code> 是偶数。<code>receiver.coded_symbol_count</code> 写成：</p>
+<pre><code>return 2 * ((info_block + file_size + coded_bytes - 1) // coded_bytes)</code></pre>
+<p class="src">n2/receiver.py:45-47</p>
+
+<h4>0.4 用 r1 把符号数算一遍</h4>
+<p><code>metrics.json</code> 里：<code>file_size=9829</code>，<code>declared_symbols=40</code>，<code>K=42</code>，<code>blocks_ok=41/41</code>。</p>
+<ol>
+<li>帧头字段 <code>declared_symbols</code> 来自发射端 <code>ceil(2×file_size/498)</code>。<code>2×9829/498 ≈ 39.47</code>，向上取整得 <b>40</b>。它只按文件长度估算，不含 249 字节帧头。</li>
+<li>未编码字节 = 249 + 9829 = 10078。补到 498 的整数倍：<code>ceil(10078/498)=21</code> 段，每段 498 字节，再拆成 2 个 249 字节信息块，共 <b>42</b> 个码字。这就是 <code>K</code>。</li>
+<li>第 1 个数据符号在搜头时已经译过。载荷循环从第 2 个数据符号开始，所以 LDPC 统计是 <b>41</b> 个码字。</li>
+</ol>
+<div class="note warn"><b>陷阱</b>　<code>declared_symbols</code> 用来核对帧头是否自洽，循环上界用 <code>K</code>。三个人都要能在纸上重算这三步。</div>
+
+<h4>0.5 目录和结果文件</h4>
+<table>
+<tr><th>路径</th><th>内容</th></tr>
+<tr><td><code>standard/example_tx.py</code></td><td>发射端，空中接口真源</td></tr>
+<tr><td><code>n2/params.py</code> <code>phy.py</code></td><td>参数和比特级原语　<span class="tag a">A</span></td></tr>
+<tr><td><code>n2/capture.py</code> <code>align.py</code></td><td>Chirp、训练相关、按钟偏取符号　<span class="tag b">B</span></td></tr>
+<tr><td><code>n2/channel.py</code> <code>decode_path.py</code></td><td>信道、LLR、LDPC　<span class="tag c">C</span></td></tr>
+<tr><td><code>n2/receiver.py</code></td><td>把上面串起来</td></tr>
+<tr><td><code>n2/report.py</code></td><td>写 <code>metrics.json</code> 和诊断图</td></tr>
+<tr><td><code>data/</code></td><td>收到的 WAV</td></tr>
+<tr><td><code>source/</code></td><td>原始文件，用于字节对照</td></tr>
+<tr><td><code>run/n2/r1/</code></td><td>一份已经解出的结果</td></tr>
+</table>
+<p><code>r1</code> 里和同步相关的字段：</p>
+<div class="kv">
+  <span><i>sync_start</i> ≈ 212925.05</span>
+  <span><i>clock_error_ppm</i> ≈ −11.65</span>
+  <span><i>end.n_sym_raw</i> ≈ 49.999</span>
+  <span><i>mean_abs_h</i> ≈ 2.34</span>
+  <span><i>median_abs_llr</i> ≈ 3.02</span>
+</div>
+<ul>
+<li><code>sync_start</code>：第一训练符号起点，整数样点 212925，分数约 0.047。</li>
+<li><code>clock_error_ppm</code>：采样钟相对 48000 Hz 约慢 11.65 ppm（接收端时间轴相对发射端的比例）。</li>
+<li><code>end.n_sym_raw</code>：后训练起点距体起点约 50 个符号，<code>50−8=42=K</code>。</li>
+<li><code>mean_abs_h</code>、<code>median_abs_llr</code>：信道幅度和软信息强度，成员 C 用。</li>
+</ul>
+
+<h4>0.6 第 0 章练习</h4>
+<ol>
+<li>打开 <code>run/n2/r1/metrics.json</code>，指出 <code>capture</code>、<code>lock</code>、<code>end</code>、<code>header</code> 各对应流水线的哪一步。</li>
+<li>换一个文件大小，例如 1000 字节，手算 <code>declared_symbols</code> 和 <code>K</code>。</li>
+<li>跑 <code>python selftest.py</code>，确认理想回环通过。</li>
+</ol>
+</section>
+
+<section id="ch1" data-m="a">
+<h3>第 1 章　成员 A：空中接口<span class="tag a">A</span></h3>
+<p>成员 A 的交付物是一张「一个字节如何变成子载波，又如何变回来」的对照表。成员 B、C 的所有数组形状都以这张表为准。</p>
+<p>阅读顺序：<code>params.py</code> → <code>phy.py</code> → <code>standard/example_tx.py</code> 的 <code>mapp</code>、<code>train_symbol_gen</code>、<code>sequence</code>、<code>header_gen</code>、<code>file_process</code>、<code>ldpc_encoding</code> → <code>LDPC/new_ldpc/README.md</code> 前 80 行。</p>
+
+<h4>1.1 参数从哪来</h4>
+<p><code>TX_DEFAULTS</code> 与发射端构造函数的默认值对齐。<code>derived()</code> 只做推导，不改物理定义。训练种子 <code>TRAIN_SEED=80</code>，扰码种子 <code>SCRAMBLER_SEED=0x5A4D</code>，帧头魔术字 <code>b'PH'</code>。</p>
+<div class="note warn"><b>必须</b>　训练序列用 Python 标准库 <code>random.seed</code> 和 <code>random.randint</code>。NumPy 的随机数序列和它不同，换了之后训练符号对不上，后面的相关峰和信道估计都会错。</div>
+
+<h4>1.2 线性扫频</h4>
+<p><code>phy.linear_chirp</code> 复现发射端相位，幅度系数 <code>amp=0.8</code>。整段 OFDM 体在发射端还会按峰值归一化；扫频本身用这个幅度。成员 B 用这条本地扫频做匹配滤波，所以相位公式差一个符号，峰就会消失。</p>
+
+<h4>1.3 QPSK：字节到位、位到子载波</h4>
+<p>发射端 <code>mapp</code> 对每个 498 字节块、每个子载波下标 <code>i = 0 .. 1991</code>：</p>
+<ul>
+<li><code>d_i = i // 4</code>：这个符号来自块内第几个字节。</li>
+<li><code>b_i = 3 - (i % 4)</code>：字节内从高位对走到低位对。<code>i%4=0</code> 时 <code>b_i=3</code>，取的是 bit7 和 bit6。</li>
+<li><code>I = 1 - 2×bit_I</code>，<code>Q = 1 - 2×bit_Q</code>。bit 为 0 时该路是 +1，bit 为 1 时是 −1。</li>
+<li>每对里 <b>低位走 I、高位走 Q</b>。对 <code>b_i=3</code>，bit6 走 I，bit7 走 Q。</li>
+<li><code>X[400+i] = I + jQ</code>，<code>X[8192-400-i] = conj(X[400+i])</code>。负频率是正频率的共轭，IFFT 取实部后才是实信号。</li>
+<li>时域：IFFT 的实部，再把最后 2048 点复制到前面，这就是循环前缀。</li>
+</ul>
+<p><code>phy.bytes_to_qpsk_grid</code> 与这段一一对应。接收端软解调在主路径里用 <code>qpsk_llr_scaled</code>：每个子载波先输出 Q 的 LLR，再输出 I 的 LLR，于是字节内仍是 bit7、bit6、bit5……bit0。</p>
+<p>LLR 的定义是 <code>log P(bit=0)/P(bit=1)</code>，正值更像 0，和 <code>I=1-2×bit</code> 的符号一致：实部为正时 I 比特更像 0。硬判决可用 <code>slice_qpsk</code>：实部、虚部各自取符号。</p>
+
+<h4>1.4 训练符号</h4>
+<p><code>train_symbol_gen(..., symbol_count=16)</code> 一次生成 16 个。前 8 个放在数据前，后 8 个放在数据后。每个数据 bin：</p>
+<pre><code>rand_num ∈ {0,1,2,3}
+I = 1 - 2*(rand_num & 1)
+Q = 1 - 2*((rand_num >> 1) & 1)</code></pre>
+<p>和数据 QPSK 同一张星座。<code>phy.train_freq_time</code> 返回频域 <code>(16, 8192)</code> 和带循环前缀的时域 <code>(16, 10240)</code>。成员 B 做相关时用时域；成员 C 做信道估计时用频域的有效 bin。</p>
+
+<h4>1.5 扰码</h4>
+<p>15 位线性反馈移位寄存器，种子 <code>0x5A4D</code>。每位输出是 bit14，反馈是 bit14 异或 bit13，然后左移，新的最低位放反馈。<b>每个码字单独从种子重新开始。</b></p>
+<p>发射顺序：LDPC 编码之后，码字比特与这条序列异或，再打包成字节。字节内 MSB 先入：<code>scrambled[8j]</code> 是该字节的 bit7。</p>
+<p>接收端在 LLR 上解扰，见 <code>descramble_llr</code>：扰码比特为 1 时把该 LLR 乘 −1。等效于「比特异或 1 会交换 0 和 1 的似然」。先硬判再异或也可以在无噪声时得到同样比特，但会丢掉软信息，LDPC 需要的是软信息。</p>
+
+<h4>1.6 LDPC 调用约定</h4>
+<p>使用仓库内 <code>LDPC/new_ldpc</code>，Jossy 2018 的 IEEE 802.16 原型图实现。</p>
+<pre><code>ldpc.code(standard="802.16", rate="1/2", z=166)
+app, it = coder.decode(llr, dectype="sumprod2")</code></pre>
+<p><code>N=24z=3984</code> bit 码字，<code>K=12z=1992</code> bit 信息。该实现把原型图移位取 <code>proto % z</code>，与发射端必须是同一个库。<code>app &lt; 0</code> 判为 1。<code>decode_path.LdpcBank.decode_codeword</code> 先解扰，再译码，返回信息比特、整码字比特和迭代次数。迭代次数小于 200 视为收敛。</p>
+<div class="note"><b>环境</b>　Windows 上需要把 <code>LDPC/new_ldpc/src/c_ldpc.c</code> 编译成 <code>bin/c_ldpc.dll</code>，否则 <code>LdpcBank</code> 初始化失败，主路径在译码前就返回阶段 <code>ldpc</code>。</div>
+
+<h4>1.7 PH 帧头</h4>
+<p>249 字节信息块的布局（<code>header_gen</code>）：</p>
+<table>
+<tr><th>字节</th><th>内容</th></tr>
+<tr><td>0:2</td><td><code>b'PH'</code></td></tr>
+<tr><td>2</td><td>版本 <code>0x00</code></td></tr>
+<tr><td>3:7</td><td><code>file_size</code>，4 字节大端</td></tr>
+<tr><td>7:11</td><td><code>declared_symbols</code>，4 字节大端</td></tr>
+<tr><td>11:</td><td>UTF-8 文件名</td></tr>
+<tr><td>文件名后 1 字节</td><td><code>0x00</code>，因为 <code>bytearray</code> 初值是 0，这里没有另写字符</td></tr>
+<tr><td>再 4 字节</td><td>CRC32，大端</td></tr>
+<tr><td>其余</td><td>0</td></tr>
+</table>
+<p>CRC 覆盖 <code>ba[:11+len(filename)]</code>，含魔术字到文件名最后一字节，<b>不含</b>结束 <code>0x00</code>，<b>不含</b> CRC 自身。<code>parse_ph_header</code> 用 <code>zlib.crc32</code> 重算，不一致就返回 <code>None</code>。文件内容里也可能出现字节 <code>PH</code>，所以 CRC 通过才算找到头。</p>
+<p><code>_try_header</code> 还要求：<code>declared_symbols == (file_size+248)//249</code>，并且文件名非空。<code>(file_size+248)//249</code> 就是 <code>ceil(file_size/249)</code>，与 <code>ceil(2×file_size/498)</code> 相同。r1 上两边都是 40。</p>
+<p>载荷切取在 <code>extract_payload</code>：从 <code>offset+249</code> 开始，长度 <code>file_size</code>。主路径把头放在信息流开头，<code>offset=0</code>，所以是字节 <code>[249 : 249+file_size]</code>。末尾补零码字留在信息流里，写出文件时按 <code>file_size</code> 截断。</p>
+
+<h4>1.8 成员 A 的讲解提纲</h4>
+<p>用 15 分钟讲清四件事：</p>
+<ol>
+<li>498、249、1992、3984 的换算。</li>
+<li>一个字节的 8 个比特怎样落到 4 个 QPSK 上，先 Q 后 I。</li>
+<li>训练为什么必须用 <code>random.seed(80)</code>。</li>
+<li>r1 的 40、42、41 分别是什么。</li>
+</ol>
+<details><summary>练习</summary>
+<ol>
+<li>手工映射字节 <code>0x80</code>（只有 bit7 为 1）。第一个符号的 Q 应为 −1，I 应为 +1，其余三个符号为 <code>1+j</code>。</li>
+<li>在 <code>selftest.py</code> 的 <code>test_phy_against_tx</code> 对照本地 Chirp、训练和扰码是否与发射端相同。</li>
+<li>写 20 字节的假想文件名，标出 CRC 覆盖的最后一字节，以及 <code>0x00</code> 和 CRC 各占的位置。</li>
+</ol>
+</details>
+</section>
+
+<section id="ch2" data-m="b">
+<h3>第 2 章　成员 B：捕获与对准<span class="tag b">B</span></h3>
+<p>成员 B 的交付物是一张 r1 的时间轴：两个 Chirp 峰、OFDM 体粗起点、第一训练起点、后训练起点、<code>K</code>、钟偏 ppm。成员 C 拿到的是「起点 + 钟偏」已经选好之后的频谱。</p>
+<p>阅读顺序：<code>capture.py</code> 的 <code>find_two_chirps</code>、<code>parabolic_peak</code>、<code>coarse_body_start</code> → <code>align.py</code> 的 <code>matched_start</code>、<code>find_end_preamble</code>、<code>extract_active_sfo</code>、<code>training_peaks</code>、<code>best_sfo_near</code> → <code>receiver.py</code> 的 <code>_lock_frame</code>、<code>_trust_sfo</code>、<code>_header_jobs</code>、<code>_payload_sfo_search</code>。</p>
+<p><code>dechirp_sfo</code>、<code>resample_clock</code>、<code>cfo_search</code>、<code>extract_ffts</code> 是同一目录里的工具。主路径取符号走 <code>extract_active_sfo</code>，整段重采样标志在 r1 上是 <code>resampled=false</code>，<code>cfo_hz=0</code>。</p>
+
+<h4>2.1 匹配滤波在找什么</h4>
+<p>把本地模板时间反转，再与接收波形做卷积，等价于相关。<code>fftconvolve(..., mode="valid")</code> 的输出再平方，峰值位置就是模板起点。</p>
+<p>Chirp 模板长 144000 点，训练模板是前 2 个训练符号接起来，长 <code>2×10240</code>。平方之后的峰用三点抛物线插值，得到亚采样位置。<code>parabolic_peak</code> 在整数峰 <code>i</code> 及其左右两点上拟合抛物线，修正量限制在 ±1 个样点内。r1 的第一训练起点因此可以是 <code>212925.047</code>，而不是整数 212925。</p>
+
+<h4>2.2 锁帧</h4>
+<p><code>_lock_frame</code> 做这几件事：</p>
+<ol>
+<li><code>find_two_chirps</code>：全段 Chirp 相关，取两个最强峰，按时间排序。第一峰信噪比要大于 8 才算 <code>ok</code>。r1 的两个峰信噪比都在 10<sup>5</sup> 量级，<code>peak1≈44926</code>，<code>peak2≈830837</code>。</li>
+<li><code>coarse_body_start</code>：<code>第一峰 + 144000 + 24000</code>。这是 OFDM 体的粗起点，误差可以到几百个样点，下一步再收紧。</li>
+<li><code>matched_start</code>：在粗起点前后各约 2.5 个符号的窗里，用前两个训练符号做相关。返回的 <code>snr</code> 要 ≥ 4。r1 的 <code>lock.snr≈7271</code>。</li>
+<li><code>find_end_preamble</code>：从第一训练起点往后，用后 8 个训练符号做相关。峰相对起点的样点数除以 10240，得到 <code>n_sym_raw</code>。<code>K = round(n_sym_raw) - 8</code>。r1 上 <code>n_sym_raw≈49.9994</code>，<code>K=42</code>。<code>K</code> 还必须落在 1 到 20000。</li>
+</ol>
+<p>后训练模板是 8 个符号，相关峰出现在这 8 个符号的起点，所以偏移量是「前 8 训练 + K 个数据」，再减 8 得到 <code>K</code>。</p>
+
+<h4>2.3 采样钟偏</h4>
+<p>录音设备的采样率与 48000 Hz 有微小相对偏差，记为 <code>sfo</code>，单位是相对比例。ppm 是 <code>sfo×10⁶</code>。r1 约 −11.65 ppm，即 <code>sfo≈-1.165×10⁻⁵</code>。</p>
+<p>这个偏差会随时间积累。一个符号 10240 点，42+16=58 个符号的 OFDM 体大约 59 万点，11.65 ppm 大约累积 7 个样点。只锁住开头、后面仍按 10240 等间隔切，尾部训练会慢慢滑出 FFT 窗。</p>
+<p>主路径把钟偏留在取样网格里。<code>extract_active_sfo</code> 对第 <code>m</code> 个符号、FFT 内第 <code>n</code> 点，取样位置是：</p>
+<pre><code>start + (1 + sfo) * (m*10240 + 2048 + n)</code></pre>
+<p><code>+2048</code> 先跳过循环前缀。然后对原始 WAV 做线性插值，再对这 8192 点做 <code>rFFT</code>，只保留 bin 400 到 2391。越界就抛出 <code>ValueError</code>，调用方把它当成这次候选失败。</p>
+<p>钟偏从两个几何量来：</p>
+<ul>
+<li>后训练：<code>sfo_end = end_offset / ((8+K)×10240) − 1</code>。</li>
+<li>双 Chirp：<code>sfo_chirp = (peak2−peak1) / 标称间距 − 1</code>。标称间距是一条扫频 + 两段静音 + 全部 OFDM 符号。</li>
+</ul>
+<p><code>_trust_sfo</code> 的选择规则：</p>
+<ul>
+<li>后训练的 <code>n_sym_raw</code> 与整数之差小于 0.08，且 <code>|sfo_end|&lt;5×10⁻³</code> 时，采用训练估计。</li>
+<li>此时若 Chirp 估计也可靠，且两者相差小于 80 ppm，才取平均。</li>
+<li>训练间距还没对齐时，才改用 Chirp 估计。</li>
+<li>两者都不可靠时用 0。</li>
+</ul>
+<div class="note warn"><b>陷阱</b>　两个差很远的估计取平均，会得到几十万 ppm 的无效钟偏。两个数的中位数等于平均值，所以这里不能用 median。r1 的 <code>n_sym_raw</code> 离 50 只有约 0.0006，走训练估计这条。</div>
+
+<h4>2.4 用帧头 CRC 选候选</h4>
+<p>几何锁给出一个起点和一个钟偏中心，仍可能偏几个到几百个样点。<code>_header_jobs</code> 在锁点附近构造候选：</p>
+<ul>
+<li>起点偏移：0、±128、±256、±64 样点。</li>
+<li>钟偏：中心，以及中心 ±5、±10、±20、±30 ppm。</li>
+<li>中心的绝对值大于 40 ppm 时，额外把 0 ppm 放进中心列表。</li>
+</ul>
+<p>每个候选调用 <code>_try_header</code>：用该起点和钟偏取出 9 个符号（8 训练 + 第 1 个数据符号），估计 <code>H</code>，解第一个数据符号。<code>parse_ph_header</code> 返回非空才保留。多个候选都通过时，用前 8 个训练的信道能量当分数，留能量更大的；实现里一旦找到一个通过的头就会 <code>break</code>，所以先加入列表的锁点候选优先。</p>
+<p>锁点全部失败时，才调用 <code>training_peaks</code>：在整段 WAV 上找前两个训练符号的相关峰，最多 4 个，相邻峰至少隔半个符号。每个峰再用 <code>best_sfo_near</code> 在 ±200 ppm、步长 25 ppm 上选训练残差最小的钟偏。这条路径用于 Chirp 对不可用、但训练相关仍在的录音。</p>
+
+<h4>2.5 载荷钟偏再收细</h4>
+<p>头已经通过之后，<code>_payload_sfo_search</code> 在入选钟偏的 ±50 ppm 内按 1 ppm 步进。每个假设上分别取出前 8 个和后 8 个训练，拼成 16 行，做一次最小二乘，用中位训练残差当代价，取得分最低的 <code>payload_sfo</code>。后面所有数据符号都用这个钟偏调用 <code>extract_active_sfo</code>。</p>
+<p>r1 的 <code>clock_error_ppm</code> 是搜头阶段的钟偏；<code>payload_ppm</code> 若写在诊断里，是这一步细化后的值。</p>
+
+<h4>2.6 分数定时在频域里意味着什么</h4>
+<p>主路径用插值直接取到「去掉 CP 之后的 8192 点」，分数样点体现在 <code>start</code> 的小数部分和 <code>sfo</code> 里。</p>
+<p><code>sto_phase</code> 和 <code>extract_ffts</code> 是另一套取符号方式：整数点截取，再用 <code>exp(-j 2π k Δ / N)</code> 补偿分数延迟。<code>Δ&gt;0</code> 表示 FFT 窗比信号晚了 <code>Δ</code> 个样点。当前 <code>recover_array</code> 走插值网格，这两支函数留给对照和实验。</p>
+
+<h4>2.7 成员 B 的讲解提纲</h4>
+<p>在 r1 的时间轴上标出：</p>
+<ol>
+<li><code>peak1</code>、<code>peak1+144000+24000</code>、<code>sync_start</code> 三者相差多少样点。粗起点和最终锁点应该只差搜索窗里的一个小修正。</li>
+<li><code>end_offset / 10240 ≈ 50</code>，减 8 得 <code>K</code>。</li>
+<li>−11.65 ppm 在约 50 万样点上累积多少样点（约 6 个）。说明为什么尾部必须用 <code>(1+sfo)</code> 拉伸取样位置。</li>
+<li>搜头候选为什么同时包含 0 ppm。</li>
+</ol>
+<details><summary>练习</summary>
+<ol>
+<li>只调用 <code>_lock_frame</code>（或按它的三步在脚本里分段打印），核对 <code>start</code>、<code>K</code>、<code>n_sym_raw</code> 与 <code>metrics.json</code> 一致。</li>
+<li>把 <code>extract_active_sfo</code> 的 <code>sfo</code> 改成 0，观察后训练残差是否变大。请在副本里做，不要改主路径。</li>
+<li>解释 <code>_trust_sfo</code> 在「训练已对齐且与 Chirp 相差 200 ppm」时返回哪一个。</li>
+</ol>
+</details>
+</section>
+
+<section id="ch3" data-m="c">
+<h3>第 3 章　成员 C：信道、均衡与译码<span class="tag c">C</span></h3>
+<p>成员 C 的交付物是：给定成员 B 的起点和钟偏，说明一个数据符号怎样变成 249 字节，以及 r1 的 41 个码字为什么全部收敛。</p>
+<p>阅读顺序：<code>channel.h_and_llr_scale</code>、<code>lerp_h</code> → <code>receiver.py</code> 的 <code>_try_header</code>、<code>_equalize_once</code>、<code>_decode_payload_symbol</code>、<code>recover_array</code> 后半段 → <code>decode_path.LdpcBank</code>、<code>extract_payload</code> → <code>report.py</code> 怎样把这些写进 <code>metrics.json</code>。</p>
+<p><code>wiener_smooth</code>、<code>cpe_and_nlms</code>、<code>hermitian_gate</code>、<code>turbo_refine</code>、<code>decode_frame</code> 是同一文件里的备用算法。<code>recover_array</code> 把 <code>turbo</code> 写成 <code>False</code>，均衡用的是下面这条更短的路径。</p>
+
+<h4>3.1 最小二乘信道</h4>
+<p>训练符号的频域已知，记为 <code>X</code>，接收为 <code>Y</code>。每个有效 bin：</p>
+<pre><code>H = mean(Y / X)</code></pre>
+<p><code>h_and_llr_scale</code> 对多行训练做这个平均，再算每音残差 <code>|Y−HX|² / |H|²</code>。有效音是 <code>|H|</code> 大于最大幅度 10<sup>−8</sup> 倍的那些 bin。噪声方差取有效音残差的中位数，并且不小于 <code>10⁻³</code>。</p>
+<p>LLR 尺度：</p>
+<pre><code>reliability = noise_var / 每音残差
+scale = 3 * clip(sqrt(reliability), 0.25, 4)</code></pre>
+<p>残差小的子载波尺度接近上限，深衰落或很吵的子载波尺度被压到 0.25 附近。这个尺度只乘在 LLR 的幅度上，不翻符号。</p>
+<p>r1 的 <code>mean_abs_h≈2.34</code>。训练 QPSK 的幅度是 <code>√2≈1.41</code>，所以平均 <code>|Y|</code> 大约是 <code>|H|×√2</code>。具体增益还包含发射归一化和录音音量，成员 C 要会读这个量，用它比较不同录音，而不是把它当成一个固定常数。</p>
+
+<h4>3.2 头符号怎样被解出来</h4>
+<p><code>_try_header</code> 取出 9 个符号的有效子载波。前 8 行估计 <code>H</code> 和 <code>scale</code>。第 9 行是第一个数据符号：</p>
+<pre><code>Z[k] = Y[k] / H[k]     # 仅 valid 的 bin</code></pre>
+<p>然后 <code>qpsk_llr_scaled</code> → 解扰 → LDPC。信息比特打成 249 字节，送入 <code>parse_ph_header</code>。通过之后，这个 249 字节原样保留为 <code>header_raw</code>，后面和载荷信息字节拼在一起。</p>
+<p>这里的 <code>H</code> 只用于挑选候选。载荷会重新估计信道。</p>
+
+<h4>3.3 载荷上的四套 H</h4>
+<p><code>_payload_sfo_search</code> 已经用前后训练一起做过一次联合估计，得到 <code>h</code> 和 <code>scale</code>。整段体取出之后再分两套：</p>
+<ul>
+<li><code>h_front</code>：前 8 个训练。</li>
+<li><code>h_tail</code>：后 8 个训练。尾部越界时，尾部退化为联合估计。</li>
+</ul>
+<p>对第 <code>i</code> 个载荷符号（从 0 起，对应数据符号 1，因为数据符号 0 是帧头）：</p>
+<pre><code>alpha = (i+1) / max(K-1, 1)
+H(alpha) = (1-alpha) * H_front + alpha * H_tail</code></pre>
+<p>r1 的 <code>K=42</code>，第一个载荷符号 <code>α=1/41</code>，最后一个 <code>α=1</code>。信道沿符号从前往后线性过渡，用来跟上录音过程中缓慢变化的声学信道。</p>
+<p><code>_equalize_once</code> 在选定的 <code>H</code> 上：</p>
+<ol>
+<li><code>Z = Y/H</code>。</li>
+<li>硬切片得到 <code>X̂ = sign(Re Z) + j sign(Im Z)</code>。</li>
+<li>用 <code>|H|²</code> 加权，估计公共相位 <code>θ = angle(Σ |H|² Z conj(X̂))</code>。</li>
+<li><code>Z ← Z × exp(-jθ)</code>。这一步把整符号转回实轴附近，正频率一起转。</li>
+<li>用同一套 <code>scale</code> 出 LLR 并译码。</li>
+</ol>
+<p>某个码字的迭代次数小于 200 就接受。否则按顺序改试联合 <code>H</code>、仅前训练、仅后训练，以「迭代次数更小，其次是中位 <code>|LLR|</code> 更大」为优。</p>
+
+<h4>3.4 从 LLR 到文件字节</h4>
+<p>一个符号的 <code>Z</code> 长度 1992。<code>qpsk_llr_scaled</code> 得到 3984 个 LLR，并裁剪到 ±30。<code>LdpcBank.decode_codeword</code> 解扰后译码，取出前 1992 个信息比特。<code>bits_to_bytes</code> 按大端打包成 249 字节。</p>
+<p>41 个载荷符号接成 <code>payload_bytes</code>。信息流是 <code>header_raw + payload_bytes</code>。<code>extract_payload</code> 丢掉前 249 字节，再取 <code>file_size</code> 字节。r1 得到 9829 字节的 <code>cute.jpg</code>。</p>
+<p>全部迭代次数都小于 200 时，<code>payload_complete=true</code>，<code>recover_array</code> 返回 <code>ok=True</code>、阶段 <code>ok</code>。有文件但有码字未收敛时，阶段是 <code>ldpc</code>，诊断里写明已按帧头长度写出。CRC 已通过但载荷不完整时，输出文件名带 <code>.partial</code> 这一类标记；以 <code>write_run_outputs</code> 的实际分支为准，读一份失败录音的 <code>recovered_name</code> 即可确认。</p>
+<p><code>file_match</code>：若 <code>source/</code> 中有与帧头同名的文件，逐字节比较。r1 对应 <code>source/cute.jpg</code>，结果为 <code>true</code>。</p>
+
+<h4>3.5 失败停在哪一段</h4>
+<table>
+<tr><th>stage</th><th>含义</th></tr>
+<tr><td><code>capture</code></td><td>波形太短，或 Chirp 未找到且没有任何头候选</td></tr>
+<tr><td><code>align</code></td><td>有起点但尾训练越界，或按钟偏取符号越界</td></tr>
+<tr><td><code>header</code></td><td>试过候选，PH CRC 都未通过</td></tr>
+<tr><td><code>ldpc</code></td><td>译码器初始化失败，或载荷长度不对，或部分码字未收敛</td></tr>
+<tr><td><code>ok</code></td><td>头 CRC 通过且载荷码字全部收敛</td></tr>
+</table>
+<p>搜头失败时，若一个候选都没生成，阶段退回 <code>capture</code> 或 <code>align</code>：没有第一 Chirp 是 <code>capture</code>，否则是 <code>align</code>。</p>
+
+<h4>3.6 诊断文件怎么读</h4>
+<table>
+<tr><th>文件</th><th>成员 C 要看的列或字段</th></tr>
+<tr><td><code>metrics.json</code></td><td><code>header_ok</code>、<code>K</code>、<code>blocks_ok/blocks_total</code>、<code>payload_complete</code>、<code>file_match</code>、<code>mean_abs_h</code>、<code>median_abs_llr</code></td></tr>
+<tr><td><code>ldpc_symbols.csv</code></td><td>每个码字的迭代次数；200 表示未收敛</td></tr>
+<tr><td><code>summary.csv</code></td><td>每子载波 <code>|H|</code>、训练残差、平均 <code>|LLR|</code></td></tr>
+<tr><td><code>H.npy</code> / <code>H_end.npy</code></td><td>联合信道与尾训练信道</td></tr>
+<tr><td><code>cpe.npy</code></td><td>每个载荷符号的公共相位</td></tr>
+<tr><td><code>decoded_header.bin</code></td><td>译出的 249 字节头</td></tr>
+</table>
+<p><code>median_abs_llr≈3</code> 表示软信息已经离开 0，和 r1 全部收敛一致。若中位 <code>|LLR|</code> 接近 0，同时大量迭代停在 200，优先回到成员 B 的起点和钟偏，再看 <code>H</code> 是否在通带内塌掉。</p>
+
+<h4>3.7 成员 C 的讲解提纲</h4>
+<ol>
+<li>画出一个 bin：<code>Y = HX + 噪声</code>，<code>Z=Y/H</code> 之后星座应靠近 <code>±1±j</code>。</li>
+<li>说明 <code>scale</code> 怎样让差的子载波少影响 LDPC。</li>
+<li>用 r1 走一遍：42 个数据符号，第 1 个是头，后 41 个进载荷循环，<code>α</code> 从 <code>1/41</code> 到 1。</li>
+<li>打开 <code>summary.csv</code> 的前几行和中间一行，比较通带中心和带边的 <code>|H|</code>。</li>
+</ol>
+<details><summary>练习</summary>
+<ol>
+<li>在纸上对 <code>Z=0.2+0.9j</code>、<code>scale=3</code> 计算两条 LLR，并说出对应比特更像 0 还是 1。</li>
+<li>找一份 <code>run/n2</code> 里 <code>ok=false</code> 的录音，只根据 <code>stage</code> 和 <code>reason</code> 说出该把问题交给成员 B 还是成员 C。</li>
+<li>说明换一套 <code>H</code> 再译时，QPSK 映射和 LDPC 码都没有变，变的是均衡后的 <code>Z</code>。</li>
+</ol>
+</details>
+</section>
+
+<section id="ch4">
+<h3>第 4 章　合练</h3>
+<p>三人一起解 <code>r1</code>，输出到一个新目录，避免覆盖已有结果：</p>
+<pre><code>cd g:\OFDM_gerson\n2
+python run_rx.py --wav ..\data\r1.wav --out-dir ..\run\n2\study_r1</code></pre>
+<p>对照表（每人填自己的列）：</p>
+<table>
+<tr><th>问题</th><th>成员 A</th><th>成员 B</th><th>成员 C</th></tr>
+<tr>
+  <td>这一格在 r1 上的数</td>
+  <td><code>file_size=9829</code>，声明符号 40，<code>K=42</code></td>
+  <td><code>sync_start</code>、ppm、<code>n_sym_raw</code></td>
+  <td>blocks 41/41，<code>mean_abs_h</code>，<code>file_match</code></td>
+</tr>
+<tr>
+  <td>它由哪个函数写出</td>
+  <td><code>coded_symbol_count</code>、<code>parse_ph_header</code></td>
+  <td><code>_lock_frame</code>、<code>_trust_sfo</code>、<code>_payload_sfo_search</code></td>
+  <td><code>_decode_payload_symbol</code>、<code>extract_payload</code></td>
+</tr>
+<tr>
+  <td>若这个数错了，下一环会看见什么</td>
+  <td>训练对不上或 CRC 范围错</td>
+  <td>取符号越界或头 CRC 失败</td>
+  <td>LDPC 不收敛或文件字节对不上</td>
+</tr>
+</table>
+<p>然后换一条 <code>data/</code> 里的其他 WAV，重复同一张表。阶段不是 <code>ok</code> 时，按 3.5 节把问题交回对应成员，只重读那一章的函数，整链重跑一次。</p>
+<div class="note"><b>结业标准</b>　三个人都能独立重算 r1 的 40 / 42 / 41，并能指出 <code>metrics.json</code> 里任意一个字段来自哪一个函数。</div>
+</section>
+
+<section id="apa">
+<h3>附录 A　主路径与库函数</h3>
+<table>
+<tr><th>能力</th><th>主路径实际调用</th><th>同文件中的库函数</th></tr>
+<tr><td>找 Chirp</td><td><code>find_two_chirps</code>、<code>coarse_body_start</code></td><td><code>dechirp_sfo</code>、<code>resample_clock</code></td></tr>
+<tr><td>锁训练、数 <code>K</code></td><td><code>matched_start</code>、<code>find_end_preamble</code></td><td><code>cfo_search</code>、<code>extract_ffts</code>、<code>sto_phase</code></td></tr>
+<tr><td>按钟偏取 FFT</td><td><code>extract_active_sfo</code></td><td>整段 <code>resample_clock</code></td></tr>
+<tr><td>Chirp 失败时的起点</td><td><code>training_peaks</code>、<code>best_sfo_near</code></td><td></td></tr>
+<tr><td>信道</td><td><code>h_and_llr_scale</code>、<code>lerp_h</code></td><td><code>wiener_smooth</code>、<code>estimate_from_known</code>、<code>cpe_and_nlms</code>、<code>hermitian_gate</code>、<code>turbo_refine</code></td></tr>
+<tr><td>译码</td><td><code>LdpcBank.decode_codeword</code>、<code>parse_ph_header</code>、<code>extract_payload</code></td><td><code>decode_frame</code>、<code>search_ph_in_stream</code></td></tr>
+</table>
+<p>读库函数时的问题只有一个：它改变的是定时、<code>H</code>，还是 LLR 幅度。确认之后再决定要不要接到 <code>recover_array</code>。</p>
+</section>
+
+<section id="apb">
+<h3>附录 B　检查题答案要点</h3>
+<ol>
+<li>1000 字节文件：<code>declared_symbols = ceil(2000/498) = 5</code>。未编码 249+1000=1249，<code>ceil(1249/498)=3</code>，<code>K=6</code>。载荷 LDPC 块数是 <code>K−1=5</code>（第 1 个数据符号是帧头）。</li>
+<li>字节 <code>0x80</code>：bit7=1 映射到第一个符号的 Q，<code>Q=−1</code>，<code>I=+1</code>，星座点 <code>1 − j</code>。其余 bit 为 0，三个符号都是 <code>1+j</code>。</li>
+<li><code>_trust_sfo</code> 在训练已对齐时返回 <code>sfo_end</code>。与 Chirp 相差 200 ppm，大于 80 ppm，不取平均。</li>
+<li><code>Z=0.2+0.9j</code>，<code>scale=3</code>：<code>LLR_Q=2.7</code>，<code>LLR_I=0.6</code>，两条都为正，两个比特都更像 0。对应星座在第一象限，靠近 <code>+j</code>。</li>
+<li><code>stage=header</code> 或 <code>align</code> 时先回到成员 B 的起点和钟偏。<code>stage=ldpc</code> 且头已经通过时，成员 C 看迭代次数和 <code>|H|</code>。<code>stage=capture</code> 时成员 B 看 Chirp 峰是否存在。</li>
+</ol>
+</section>
+
+<section id="apc">
+<h3>附录 C　术语</h3>
+<table>
+<tr><th>词</th><th>在本仓库里的意思</th></tr>
+<tr><td>bin</td><td>FFT 频率下标，<code>k=0..8191</code></td></tr>
+<tr><td>CP</td><td>循环前缀，2048 点，取自符号尾部接到头部</td></tr>
+<tr><td>STO</td><td>符号定时，FFT 窗起点相对理想起点的样点偏移</td></tr>
+<tr><td>CFO</td><td>载波频偏，单位 Hz。主路径诊断里 r1 为 0</td></tr>
+<tr><td>SFO</td><td>采样钟相对偏差，无量纲；ppm 是其 10<sup>6</sup> 倍</td></tr>
+<tr><td>H</td><td>每个有效子载波的复信道增益</td></tr>
+<tr><td>CPE</td><td>一个符号上各子载波共用的相位</td></tr>
+<tr><td>LLR</td><td>比特 0 相对比特 1 的对数似然比</td></tr>
+<tr><td>码字</td><td>3984 bit，空中占一个 OFDM 数据符号</td></tr>
+<tr><td>信息块</td><td>249 字节，LDPC 译码输出</td></tr>
+</table>
+</section>
+</main>
+</div>
+
+<script>
+// 主题
+const themeBtn = document.getElementById('theme');
+const saved = localStorage.getItem('n2course-theme');
+if (saved) document.documentElement.dataset.theme = saved;
+const syncBtn = () => themeBtn.textContent =
+  document.documentElement.dataset.theme === 'light' ? '深色' : '浅色';
+syncBtn();
+themeBtn.onclick = () => {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('n2course-theme', next);
+  syncBtn();
+};
+
+// 成员筛选：隐藏不属于该成员的分工章节，共同章节始终可见
+const flts = [...document.querySelectorAll('.flt')];
+const owned = [...document.querySelectorAll('section[data-m]')];
+flts.forEach(b => b.onclick = () => {
+  flts.forEach(x => x.classList.toggle('on', x === b));
+  const m = b.dataset.m;
+  owned.forEach(s => s.classList.toggle('hidden', !!m && s.dataset.m !== m));
+  document.querySelectorAll('nav a').forEach(a => {
+    const t = document.querySelector(a.getAttribute('href'));
+    a.classList.toggle('hidden', !!t && t.classList.contains('hidden'));
+  });
+});
+
+// 侧栏高亮
+const links = [...document.querySelectorAll('nav a')];
+const obs = new IntersectionObserver(es => {
+  es.forEach(e => {
+    if (!e.isIntersecting) return;
+    links.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id));
+  });
+}, {rootMargin: '-15% 0px -75% 0px'});
+document.querySelectorAll('section[id]').forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
