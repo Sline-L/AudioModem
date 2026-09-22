@@ -15,7 +15,7 @@
   "residual_delay_samples": null,
   "mean_abs_h": 1.726028930833429,
   "median_training_noise": 3.0000000031512974,
-  "median_abs_llr": 3.1717437775209487,
+  "median_abs_llr": 3.1504706963194824,
   "turbo": false,
   "header_ok": true,
   "header": {

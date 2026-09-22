@@ -1,4 +1,4 @@
-"""n2 接收机编排。同步/取样对齐 AudioModem n3_2：SFO 放在插值网格，帧头 CRC 选择候选。"""
+"""n2 接收机编排。采样钟用频域线性相位补偿，帧头 CRC 选择候选。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 
 from align import (
     best_sfo_near,
-    extract_active_sfo,
+    extract_active_phase,
     find_end_preamble,
     matched_start,
     training_peaks,
@@ -75,7 +75,7 @@ def _decode_symbol(z, scale, bank):
 
 def _try_header(rx, start, sfo, known_front, bank, d):
     try:
-        y = extract_active_sfo(rx, start, 9, sfo, d)
+        y = extract_active_phase(rx, start, 9, sfo, d)
     except ValueError:
         return None
     h, scale, noise_var, valid = h_and_llr_scale(y[:8], known_front)
@@ -224,13 +224,13 @@ def _payload_sfo_search(rx, start, sfo0, k, known, d):
     n_pre = d["preamble_count"]
     known_front = known[:n_pre]
     known_tail = known[n_pre : 2 * n_pre]
-    slen = d["symbol_len"]
     best = None
     for sfo in sfo0 + np.arange(-50.0, 50.1, 1.0) * 1e-6:
         try:
-            front = extract_active_sfo(rx, start, n_pre, sfo, d)
-            tail_start = float(start) + (n_pre + k) * slen * (1.0 + sfo)
-            tail = extract_active_sfo(rx, tail_start, n_pre, sfo, d)
+            front = extract_active_phase(rx, start, n_pre, sfo, d)
+            tail = extract_active_phase(
+                rx, start, n_pre, sfo, d, symbol_offset=n_pre + k
+            )
         except ValueError:
             continue
         joint_y = np.vstack((front, tail))
@@ -360,11 +360,11 @@ def recover_array(rx, fs=None, p=None, out_dir=None):
     art["training_noise"] = np.asarray(scale)
 
     try:
-        body = extract_active_sfo(rx, start, n_pre + k + n_pre, payload_sfo, d)
+        body = extract_active_phase(rx, start, n_pre + k + n_pre, payload_sfo, d)
         has_tail = True
     except ValueError:
         try:
-            body = extract_active_sfo(rx, start, n_pre + k, payload_sfo, d)
+            body = extract_active_phase(rx, start, n_pre + k, payload_sfo, d)
         except ValueError as exc:
             diag["fft_error"] = str(exc)
             return RxResult(False, "align", diagnostics=diag, artifacts=art)

@@ -70,7 +70,7 @@ python app.py
 3. `ldpc=收敛数/总数`、`complete`：载荷码字是否全部收敛  
 4. `file_match`：`True` / `False` / `n/a`（无对照源）
 
-钟偏做法对齐 [AudioModem n3_2](https://github.com/Sline-L/AudioModem/tree/codex/latest-unsuccessful-version/n3_2)：在 `start+(1+sfo)·偏移` 上插值取符号，用 PH 头 CRC 在多个定时候选里做最终判决，再用前后训练 1 ppm 网格细化 payload 钟偏。
+采样钟用频域线性相位：符号仍按 `N+CP` 等间隔切窗，第 g 个符号乘 `exp(-j2πkτ/N)`，`τ = frac(start) + sfo·(g·(N+CP)+CP)`。PH 头 CRC 在多个定时候选里做最终判决，再用前后训练 1 ppm 网格细化 payload 钟偏。
 
 对较难录音额外做了：
 

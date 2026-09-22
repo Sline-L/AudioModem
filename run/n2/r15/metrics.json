@@ -1,0 +1,59 @@
+{
+  "input": "G:\\OFDM_gerson\\data\\r15.wav",
+  "out": "G:\\OFDM_gerson\\run\\n2\\r15",
+  "ok": true,
+  "stage": "ok",
+  "sync_start": 284288.67854499223,
+  "sync_score": 816.8622142159675,
+  "clock_status": "preamble",
+  "clock_scale": 0.9999938764517261,
+  "clock_error_ppm": -6.123548273895274,
+  "residual_ppm": null,
+  "resampled": false,
+  "cfo_hz": 0.0,
+  "K": 118,
+  "residual_delay_samples": null,
+  "mean_abs_h": 3.699454528462362,
+  "median_training_noise": 3.000000000512398,
+  "median_abs_llr": 3.0923360092301833,
+  "turbo": false,
+  "header_ok": true,
+  "header": {
+    "filename": "niko.gif",
+    "file_size": 28683,
+    "declared_symbols": 116,
+    "K": 118,
+    "offset": 0,
+    "crc_ok": true
+  },
+  "blocks_ok": 117,
+  "blocks_total": 117,
+  "payload_complete": true,
+  "file_crc_ok": true,
+  "file_match": "n/a",
+  "source_path": null,
+  "recovered_name": "niko.gif",
+  "out_path": "G:\\OFDM_gerson\\run\\n2\\r15\\niko.gif",
+  "file_size": 28683,
+  "error": "",
+  "capture": {
+    "ok": true,
+    "snr1": 32047.960184285785,
+    "snr2": 26920.65716262658,
+    "peak1": 116580.71089957605,
+    "peak2": 1680545.9761160158
+  },
+  "lock": {
+    "start": 284288.67854499223,
+    "peak_energy": 2.115918607234049,
+    "snr": 816.8622142159675,
+    "integer": 284289,
+    "frac": -0.3214550077682361
+  },
+  "end": {
+    "K": 118,
+    "end_offset": 1290232.0991530751,
+    "snr": 1860.962271502731,
+    "n_sym_raw": 125.99922843291749
+  }
+}

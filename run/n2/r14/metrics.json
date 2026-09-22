@@ -13,9 +13,9 @@
   "cfo_hz": 0.0,
   "K": 40,
   "residual_delay_samples": null,
-  "mean_abs_h": 6.400190779070898,
-  "median_training_noise": 3.000000399045125,
-  "median_abs_llr": 2.959669024040183,
+  "mean_abs_h": 7.539033434970527,
+  "median_training_noise": 3.0000026821180246,
+  "median_abs_llr": 2.892394761144561,
   "turbo": false,
   "header_ok": true,
   "header": {

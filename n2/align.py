@@ -106,6 +106,39 @@ def sto_phase(n_fft, frac):
     return np.exp(-2j * np.pi * k * float(frac) / n_fft)
 
 
+def extract_active_phase(rx, start, n_sym, sfo, p=None, symbol_offset=0):
+    """
+    等间隔切窗，再用频域线性相位补偿采样钟。
+    第 g 个符号的等效时延（样点）为
+    τ = frac(start) + sfo * (g * symbol_len + CP)，
+    频谱乘 exp(-j 2π k τ / N)。不改 WAV 采样率，也不在时域插值拉伸取样点。
+    symbol_offset 是本段第一个符号在整帧里的序号，尾训练要传 8+K。
+    """
+    d = derived(p)
+    n = d["N"]
+    cp = d["CP"]
+    slen = d["symbol_len"]
+    bins = active_bins(d)
+    n_sym = int(n_sym)
+    if n_sym < 1:
+        raise ValueError("符号数无效")
+    rx = np.asarray(rx, dtype=np.float64)
+    i_base = int(np.round(float(start)))
+    frac = float(start) - i_base
+    sfo = float(sfo)
+    k = bins.astype(np.float64)
+    specs = np.empty((n_sym, bins.size), dtype=np.complex128)
+    for m in range(n_sym):
+        g = int(symbol_offset) + m
+        i0 = i_base + g * slen + cp
+        if i0 < 0 or i0 + n > len(rx):
+            raise ValueError("符号越界，对准失败")
+        tau = frac + sfo * (g * slen + cp)
+        spec = np.fft.rfft(rx[i0 : i0 + n], n=n)
+        specs[m] = spec[bins] * np.exp(-2j * np.pi * k * tau / n)
+    return specs
+
+
 def extract_active_sfo(rx, start, n_sym, sfo, p=None):
     """
     n3_2 同款：在 start+(1+sfo)*(m*(N+CP)+CP+n) 上线性插值再 rFFT。
@@ -173,7 +206,7 @@ def best_sfo_near(rx, start, known_front, p=None, span_ppm=200.0, step_ppm=25.0)
     for ppm in np.arange(-float(span_ppm), float(span_ppm) + 0.5, float(step_ppm)):
         sfo = ppm * 1e-6
         try:
-            y = extract_active_sfo(rx, start, 8, sfo, d)
+            y = extract_active_phase(rx, start, 8, sfo, d)
         except ValueError:
             continue
         h = np.mean(y / (known_front + 1e-12), axis=0)
